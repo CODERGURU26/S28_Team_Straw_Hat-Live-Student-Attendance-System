@@ -22,6 +22,9 @@ from database import (
     update_student_photos,
 )
 from face_utils import average_encodings, detect_faces_and_match, encode_face
+    get_students,
+)
+from face_utils import detect_faces_and_match, extract_single_face_encoding
 
 load_dotenv()
 
@@ -78,6 +81,12 @@ def validate_student_photo():
 
     try:
         encode_face(temp_path)
+    filename = secure_filename(f"validate_{uuid.uuid4().hex}_{photo.filename}")
+    temp_path = os.path.join(STUDENT_PHOTO_FOLDER, filename)
+    photo.save(temp_path)
+
+    try:
+        extract_single_face_encoding(temp_path)
         return jsonify({"success": True, "message": "Exactly one face detected"})
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
@@ -184,6 +193,30 @@ def add_student_photos(student_id):
         return jsonify({"success": False, "message": str(exc)}), 400
     except Exception as exc:
         return jsonify({"success": False, "message": f"Failed to add photos: {str(exc)}"}), 500
+
+
+    photo = request.files.get("photo")
+
+    if not all([name, roll_number, photo]):
+        return jsonify({"success": False, "message": "name, roll_number and photo are required"}), 400
+
+    filename = secure_filename(f"{uuid.uuid4().hex}_{photo.filename}")
+    photo_abs_path = os.path.join(STUDENT_PHOTO_FOLDER, filename)
+    photo_rel_path = f"student_photos/{filename}"
+    photo.save(photo_abs_path)
+
+    try:
+        face_encoding = extract_single_face_encoding(photo_abs_path)
+        student_id = create_student(name, roll_number, photo_rel_path, face_encoding)
+        return jsonify({"success": True, "student_id": student_id, "message": "Student registered successfully"}), 201
+    except ValueError as exc:
+        if os.path.exists(photo_abs_path):
+            os.remove(photo_abs_path)
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        if os.path.exists(photo_abs_path):
+            os.remove(photo_abs_path)
+        return jsonify({"success": False, "message": f"Registration failed: {str(exc)}"}), 500
 
 
 @app.route("/api/students", methods=["GET"])
@@ -302,6 +335,11 @@ def export_attendance_csv(session_id):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Name", "Roll Number", "Status", "BBox"])
+
+    present_lookup = {}
+    for result in session.get("results", []):
+        if result.get("status") == "present":
+            present_lookup[result["name"]] = result
 
     for result in session.get("results", []):
         if result["status"] == "unknown":

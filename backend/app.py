@@ -25,6 +25,10 @@ from database import (
     get_students,
     get_teacher_by_email,
     update_student_photos,
+    create_schedule,
+    get_schedules,
+    update_schedule,
+    delete_schedule,
 )
 from face_utils import average_encodings, detect_faces_and_match, encode_face
 
@@ -471,6 +475,50 @@ def all_student_attendance_stats():
         })
         
     return jsonify(stats)
+
+
+@app.route("/api/schedules", methods=["GET"])
+def list_schedules():
+    return jsonify(get_schedules()), 200
+
+
+@app.route("/api/schedules", methods=["POST"])
+def add_schedule():
+    data = request.json or {}
+    required = ["subject", "time", "room", "type", "day_of_week"]
+    if not all(k in data for k in required):
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
+    
+    try:
+        sid = create_schedule(data)
+        return jsonify({"success": True, "schedule_id": sid}), 201
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/schedules/<schedule_id>", methods=["PUT"])
+def edit_schedule(schedule_id):
+    data = request.json or {}
+    try:
+        updated = update_schedule(schedule_id, data)
+        if updated:
+            return jsonify({"success": True}), 200
+        else:
+            return jsonify({"success": False, "message": "Schedule not found or unchanged"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/schedules/<schedule_id>", methods=["DELETE"])
+def remove_schedule(schedule_id):
+    try:
+        deleted = delete_schedule(schedule_id)
+        if deleted:
+            return jsonify({"success": True}), 200
+        else:
+            return jsonify({"success": False, "message": "Schedule not found"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 if __name__ == "__main__":

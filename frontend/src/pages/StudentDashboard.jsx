@@ -2,10 +2,10 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   LogOut, User, CalendarCheck, CalendarX, Camera, ChevronRight, CheckCircle2,
-  Clock, ScanFace, Upload, XCircle, Info
+  Clock, ScanFace, Upload, XCircle, Info, Calendar, MapPin
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { getStudentAttendance, addStudentPhotos } from '../api'
+import { getStudentAttendance, addStudentPhotos, getSchedules } from '../api'
 
 const API_BASE = 'http://localhost:5000'
 
@@ -13,6 +13,7 @@ export default function StudentDashboard() {
   const navigate = useNavigate()
   const [student, setStudent] = useState(null)
   const [attendance, setAttendance] = useState(null)
+  const [schedules, setSchedules] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -31,17 +32,21 @@ export default function StudentDashboard() {
     const parsed = JSON.parse(stored)
     setStudent(parsed)
 
-    const loadAttendance = async () => {
+    const loadData = async () => {
       try {
-        const res = await getStudentAttendance(parsed.id)
-        setAttendance(res.data)
+        const [attRes, schedRes] = await Promise.all([
+          getStudentAttendance(parsed.id),
+          getSchedules()
+        ])
+        setAttendance(attRes.data)
+        setSchedules(schedRes.data)
       } catch {
-        toast.error('Failed to load attendance data')
+        toast.error('Failed to load dashboard data')
       } finally {
         setLoading(false)
       }
     }
-    loadAttendance()
+    loadData()
   }, [navigate])
 
   const logout = () => {
@@ -146,6 +151,27 @@ export default function StudentDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
+        {/* ─── Notification Banner ─── */}
+        {schedules.length > 0 && (
+          <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex items-start sm:items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg">
+                <CalendarCheck size={20} />
+              </div>
+              <div>
+                <p className="font-semibold text-indigo-900">Upcoming Schedule</p>
+                <p className="text-sm text-indigo-700">You have {schedules.length} session{schedules.length !== 1 && 's'} scheduled for this week.</p>
+              </div>
+            </div>
+            <button
+               onClick={() => setActiveTab('schedule')}
+               className="hidden sm:inline-block px-4 py-1.5 bg-white text-indigo-600 font-medium text-sm rounded-lg shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors"
+            >
+              View Schedule
+            </button>
+          </div>
+        )}
+
         {/* ─── Profile Header ─── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8 mb-6 flex flex-col md:flex-row gap-6 items-center md:items-start">
           <div className="flex-shrink-0">
@@ -185,6 +211,7 @@ export default function StudentDashboard() {
         <div className="flex gap-2 mb-6 border-b border-slate-200 overflow-x-auto">
           {[
             { id: 'overview', label: 'Overview' },
+            { id: 'schedule', label: 'Schedule' },
             { id: 'history', label: 'History' },
             { id: 'profile', label: 'Settings & Photos' },
           ].map((tab) => {
@@ -206,6 +233,56 @@ export default function StudentDashboard() {
 
         {/* ─── Tab Content ─── */}
         <div className="min-h-[400px]">
+          {activeTab === 'schedule' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-slate-800">Weekly Class Schedule</h2>
+              </div>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                  const daySched = schedules.filter(s => s.day_of_week === day).sort((a,b) => a.time.localeCompare(b.time))
+                  return (
+                    <div key={day} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                      <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+                        <h3 className="font-semibold text-slate-700">{day}</h3>
+                      </div>
+                      <div className="p-4 flex-1 space-y-3 bg-slate-50/30">
+                        {daySched.length === 0 ? (
+                          <div className="text-center py-6 text-slate-400 text-sm italic">
+                            No classes
+                          </div>
+                        ) : (
+                          daySched.map(sched => (
+                            <div key={sched.id} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                              <div className="flex justify-between items-start mb-2">
+                                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-md ${
+                                  sched.type === 'Lecture' ? 'bg-blue-100 text-blue-700' :
+                                  sched.type === 'Lab' ? 'bg-emerald-100 text-emerald-700' :
+                                  'bg-purple-100 text-purple-700'
+                                }`}>
+                                  {sched.type}
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-slate-800 text-sm mb-2">{sched.subject}</h4>
+                              <div className="space-y-1">
+                                <div className="flex items-center text-[11px] text-slate-500 gap-1.5">
+                                  <Clock size={12} /> {sched.time}
+                                </div>
+                                <div className="flex items-center text-[11px] text-slate-500 gap-1.5">
+                                  <MapPin size={12} /> {sched.room || 'TBA'}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'overview' && (
             <div className="grid lg:grid-cols-3 gap-6">
 

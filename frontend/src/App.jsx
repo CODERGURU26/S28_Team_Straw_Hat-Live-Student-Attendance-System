@@ -10,6 +10,7 @@ import LandingPage from './pages/LandingPage'
 import Students from './pages/Students'
 import TakeAttendance from './pages/TakeAttendance'
 import Results from './pages/Results'
+import TeacherSchedule from './pages/TeacherSchedule'
 
 export default function App() {
   const location = useLocation()
@@ -31,6 +32,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
+            <Route path="/teacher-schedule" element={<TeacherSchedule />} />
             <Route path="/register/student" element={<Register />} />
             <Route path="/register/teacher" element={<TeacherRegister />} />
             <Route path="/teacher-login" element={<TeacherLogin />} />

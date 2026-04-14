@@ -15,6 +15,7 @@ _db = _client[DB_NAME]
 students_col = _db["students"]
 attendance_col = _db["attendance_records"]
 teachers_col = _db["teachers"]
+schedules_col = _db["schedules"]
 
 
 def _serialize_student(student: dict) -> dict:
@@ -174,3 +175,32 @@ def get_session_by_session_id(session_id: str) -> dict | None:
     if session:
         session["id"] = str(session["_id"])
     return session
+
+
+def create_schedule(data: dict) -> str:
+    data["created_at"] = datetime.now(timezone.utc)
+    result = schedules_col.insert_one(data)
+    return str(result.inserted_id)
+
+
+def get_schedules() -> list[dict]:
+    schedules = list(schedules_col.find({}).sort([("day_of_week", 1), ("time", 1)]))
+    for schedule in schedules:
+        schedule["id"] = str(schedule["_id"])
+        del schedule["_id"]
+    return schedules
+
+
+def update_schedule(schedule_id: str, data: dict) -> bool:
+    data["updated_at"] = datetime.now(timezone.utc)
+    result = schedules_col.update_one(
+        {"_id": ObjectId(schedule_id)},
+        {"$set": data}
+    )
+    return result.modified_count > 0
+
+
+def delete_schedule(schedule_id: str) -> bool:
+    result = schedules_col.delete_one({"_id": ObjectId(schedule_id)})
+    return result.deleted_count > 0
+

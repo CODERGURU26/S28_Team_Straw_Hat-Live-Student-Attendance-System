@@ -15,6 +15,11 @@ export const getStudentAttendanceStats = () => api.get(`/students/attendance-sta
 
 export const takeAttendance = (formData) => api.post('/attendance/take', formData)
 export const getSessions = () => api.get('/attendance/sessions')
+
+export const getSchedules = () => api.get('/schedules')
+export const createSchedule = (data) => api.post('/schedules', data)
+export const updateSchedule = (id, data) => api.put(`/schedules/${id}`, data)
+export const deleteSchedule = (id) => api.delete(`/schedules/${id}`)
 export const getSession = (sessionId) => api.get(`/attendance/session/${sessionId}`)
 export const exportSessionCsvUrl = (sessionId) => `${api.defaults.baseURL}/attendance/export/${sessionId}`
 

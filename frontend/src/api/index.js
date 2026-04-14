@@ -11,6 +11,7 @@ export const validateStudentPhoto = (formData) => api.post('/students/validate',
 export const getStudents = () => api.get('/students')
 export const deleteStudent = (id) => api.delete(`/students/${id}`)
 export const addStudentPhotos = (studentId, formData) => api.post(`/students/${studentId}/add-photos`, formData)
+export const getStudentAttendanceStats = () => api.get(`/students/attendance-stats`)
 
 export const takeAttendance = (formData) => api.post('/attendance/take', formData)
 export const getSessions = () => api.get('/attendance/sessions')

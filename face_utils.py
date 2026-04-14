@@ -14,7 +14,9 @@ MATCH_TOLERANCE = 0.5  # Lower = stricter matching
 
 def load_image_file(file_path: str) -> np.ndarray:
     """Load an image file into a numpy array (RGB)."""
-    return face_recognition.load_image_file(file_path)
+    # Force conversion to RGB to avoid "Unsupported image type" errors (e.g. grayscale or RGBA)
+    img = Image.open(file_path).convert("RGB")
+    return np.array(img)
 
 
 def get_face_encoding(image_path: str):

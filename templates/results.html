@@ -76,7 +76,7 @@
                     </h5>
                     <!-- Export CSV Button -->
                     <a href="{{ url_for('export_csv',
-                        data=attendance|map(attribute='name')|zip(attendance|map(attribute='status'))|map('join', ':')|join('|'),
+                        data=export_data,
                         timestamp=summary.timestamp) }}"
                        class="btn btn-sm btn-outline-glass">
                         <i class="bi bi-download me-1"></i>Export CSV

@@ -104,7 +104,7 @@ def students():
     return render_template("students.html", students=all_students)
 
 
-@app.route("/delete_student/<int:student_id>", methods=["POST"])
+@app.route("/delete_student/<string:student_id>", methods=["POST"])
 def remove_student(student_id):
     """Delete a student from the database."""
     delete_student(student_id)
@@ -187,11 +187,15 @@ def take_attendance():
         "timestamp": timestamp,
     }
 
+    # Pre-format export data for the CSV download link
+    export_data = "|".join([f"{a['name']}:{a['status']}" for a in attendance])
+
     return render_template(
         "results.html",
         attendance=attendance,
         summary=summary,
         annotated_image=annotated_relative,
+        export_data=export_data,
     )
 
 

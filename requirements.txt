@@ -4,3 +4,5 @@ Flask==3.0.3
 Pillow==10.3.0
 pandas==2.2.2
 numpy==1.26.4
+pymongo[srv]==4.13.0
+python-dotenv==1.0.1

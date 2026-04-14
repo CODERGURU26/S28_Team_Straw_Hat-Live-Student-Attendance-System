@@ -1,124 +1,110 @@
 """
-database.py — SQLite database setup and query helpers for the
+database.py — MongoDB database setup and query helpers for the
 Face Recognition Attendance Monitoring System.
 """
 
-import sqlite3
 import os
 import numpy as np
 from datetime import datetime
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+from bson.binary import Binary
+from dotenv import load_dotenv
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "attendance.db")
+# Load environment variables
+load_dotenv()
 
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise ValueError("No MONGO_URI found in environment variables. Please check your .env file.")
 
-def get_connection():
-    """Return a new SQLite connection with Row factory."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+client = MongoClient(MONGO_URI)
+try:
+    db = client.get_default_database()
+except:
+    db = client["attendance_system"]
+
+if db is None:
+    db = client["attendance_system"]
+
+# Collections
+students_col = db["students"]
+attendance_col = db["attendance_records"]
 
 
 def init_db():
-    """Create the required tables if they do not exist."""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS students (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            photo_path  TEXT NOT NULL,
-            face_encoding BLOB NOT NULL,
-            created_at  TEXT DEFAULT (datetime('now','localtime'))
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS attendance_records (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id  INTEGER NOT NULL,
-            date        TEXT NOT NULL,
-            status      TEXT NOT NULL CHECK(status IN ('Present','Absent')),
-            timestamp   TEXT NOT NULL,
-            FOREIGN KEY (student_id) REFERENCES students(id)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
+    """
+    Ensure the collections exist. 
+    MongoDB creates them automatically on first insertion, 
+    but we can create indexes here.
+    """
+    try:
+        # Create unique index on student name
+        students_col.create_index("name", unique=True)
+        print("[*] MongoDB connected and indexes verified.")
+    except Exception as e:
+        print(f"[!] Error initializing MongoDB: {e}")
 
 
 # ── Student helpers ──────────────────────────────────────────────
 
-def add_student(name: str, photo_path: str, encoding: np.ndarray) -> int:
-    """Insert a new student. Returns the new row id."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO students (name, photo_path, face_encoding) VALUES (?, ?, ?)",
-        (name, photo_path, encoding.tobytes()),
-    )
-    conn.commit()
-    student_id = cursor.lastrowid
-    conn.close()
-    return student_id
+def add_student(name: str, photo_path: str, encoding: np.ndarray) -> str:
+    """Insert a new student. Returns the new document id as a string."""
+    student_doc = {
+        "name": name,
+        "photo_path": photo_path,
+        "face_encoding": Binary(encoding.tobytes()),
+        "created_at": datetime.now()
+    }
+    result = students_col.insert_one(student_doc)
+    return str(result.inserted_id)
 
 
 def student_name_exists(name: str) -> bool:
     """Check if a student with the given name already exists."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM students WHERE LOWER(name) = LOWER(?)", (name,))
-    exists = cursor.fetchone() is not None
-    conn.close()
-    return exists
+    student = students_col.find_one({"name": {"$regex": f"^{name}$", "$options": "i"}})
+    return student is not None
 
 
 def get_all_students():
     """Return all students as a list of dicts."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, photo_path, face_encoding, created_at FROM students ORDER BY name")
-    rows = cursor.fetchall()
-    conn.close()
-
     students = []
-    for row in rows:
+    cursor = students_col.find().sort("name", 1)
+    
+    for doc in cursor:
         students.append({
-            "id": row["id"],
-            "name": row["name"],
-            "photo_path": row["photo_path"],
-            "face_encoding": np.frombuffer(row["face_encoding"], dtype=np.float64),
-            "created_at": row["created_at"],
+            "id": str(doc["_id"]),
+            "name": doc["name"],
+            "photo_path": doc["photo_path"],
+            "face_encoding": np.frombuffer(doc["face_encoding"], dtype=np.float64),
+            "created_at": doc["created_at"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(doc["created_at"], datetime) else doc["created_at"],
         })
     return students
 
 
-def get_student_by_id(student_id: int):
+def get_student_by_id(student_id: str):
     """Return a single student dict or None."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM students WHERE id = ?", (student_id,))
-    row = cursor.fetchone()
-    conn.close()
-    if row is None:
+    try:
+        doc = students_col.find_one({"_id": ObjectId(student_id)})
+        if not doc:
+            return None
+        return {
+            "id": str(doc["_id"]),
+            "name": doc["name"],
+            "photo_path": doc["photo_path"],
+            "face_encoding": np.frombuffer(doc["face_encoding"], dtype=np.float64),
+            "created_at": doc["created_at"],
+        }
+    except Exception:
         return None
-    return {
-        "id": row["id"],
-        "name": row["name"],
-        "photo_path": row["photo_path"],
-        "face_encoding": np.frombuffer(row["face_encoding"], dtype=np.float64),
-        "created_at": row["created_at"],
-    }
 
 
-def delete_student(student_id: int):
-    """Delete a student by id."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM students WHERE id = ?", (student_id,))
-    conn.commit()
-    conn.close()
+def delete_student(student_id: str):
+    """Delete a student by id string."""
+    try:
+        students_col.delete_one({"_id": ObjectId(student_id)})
+    except Exception as e:
+        print(f"[!] Error deleting student: {e}")
 
 
 # ── Attendance helpers ───────────────────────────────────────────
@@ -126,36 +112,57 @@ def delete_student(student_id: int):
 def save_attendance(records: list[dict]):
     """
     Save a batch of attendance records.
-    Each dict: {"student_id": int, "status": "Present"|"Absent"}
+    Each dict: {"student_id": str, "status": "Present"|"Absent"}
     """
-    conn = get_connection()
-    cursor = conn.cursor()
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     timestamp_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
+    docs = []
     for rec in records:
-        cursor.execute(
-            "INSERT INTO attendance_records (student_id, date, status, timestamp) VALUES (?, ?, ?, ?)",
-            (rec["student_id"], date_str, rec["status"], timestamp_str),
-        )
+        docs.append({
+            "student_id": ObjectId(rec["student_id"]) if ObjectId.is_valid(rec["student_id"]) else rec["student_id"],
+            "date": date_str,
+            "status": rec["status"],
+            "timestamp": timestamp_str
+        })
 
-    conn.commit()
-    conn.close()
+    if docs:
+        attendance_col.insert_many(docs)
+        
     return timestamp_str
 
 
 def get_attendance_history(limit: int = 50):
     """Return recent attendance records joined with student names."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT ar.id, s.name, ar.status, ar.date, ar.timestamp
-        FROM attendance_records ar
-        JOIN students s ON ar.student_id = s.id
-        ORDER BY ar.timestamp DESC
-        LIMIT ?
-    """, (limit,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    # Since MongoDB isn't a relational DB, we'll do an aggregation or separate fetches.
+    # Aggregation is cleaner.
+    pipeline = [
+        {
+            "$lookup": {
+                "from": "students",
+                "localField": "student_id",
+                "foreignField": "_id",
+                "as": "student"
+            }
+        },
+        {"$unwind": "$student"},
+        {
+            "$project": {
+                "id": {"$toString": "$_id"},
+                "name": "$student.name",
+                "status": 1,
+                "date": 1,
+                "timestamp": 1
+            }
+        },
+        {"$sort": {"timestamp": -1}},
+        {"$limit": limit}
+    ]
+    
+    try:
+        records = list(attendance_col.aggregate(pipeline))
+        return records
+    except Exception as e:
+        print(f"[!] Error fetching attendance history: {e}")
+        return []

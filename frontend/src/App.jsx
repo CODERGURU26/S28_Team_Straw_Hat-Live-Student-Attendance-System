@@ -11,6 +11,7 @@ import Results from './pages/Results'
 
 export default function App() {
   const location = useLocation()
+<<<<<<< Updated upstream
   // Hide the teacher dashboard navbar on landing, registration, and student pages
   const hideNavbar = ['/', '/register/student', '/register/teacher', '/student-dashboard'].includes(location.pathname)
 
@@ -21,6 +22,20 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
+=======
+  // Hide the teacher dashboard navbar on landing, registration, student login, teacher login, and student dashboard pages
+  const hideNavbar = ['/', '/register/student', '/register/teacher', '/student-login', '/teacher-login', '/student-dashboard'].includes(location.pathname)
+  // Pages that use their own full-screen layout (no padding/bg from the wrapper)
+  const isFullpageLayout = ['/', '/student-login', '/student-dashboard'].includes(location.pathname)
+
+  return (
+    <div className={`min-h-screen ${isFullpageLayout ? '' : 'bg-slate-100'} ${!hideNavbar ? 'md:flex' : ''}`}>
+      {!hideNavbar && <Navbar />}
+      {isFullpageLayout ? (
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/student-login" element={<StudentLogin />} />
+>>>>>>> Stashed changes
           <Route path="/student-dashboard" element={<StudentDashboard />} />
           <Route path="/register/student" element={<Register />} />
           <Route path="/register/teacher" element={<TeacherRegister />} />
@@ -28,7 +43,23 @@ export default function App() {
           <Route path="/take-attendance" element={<TakeAttendance />} />
           <Route path="/results/:sessionId" element={<Results />} />
         </Routes>
+<<<<<<< Updated upstream
       </main>
+=======
+      ) : (
+        <main className="flex-1 p-4 md:p-8">
+          <Routes>
+            <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
+            <Route path="/register/student" element={<Register />} />
+            <Route path="/register/teacher" element={<TeacherRegister />} />
+            <Route path="/teacher-login" element={<TeacherLogin />} />
+            <Route path="/students" element={<Students />} />
+            <Route path="/take-attendance" element={<TakeAttendance />} />
+            <Route path="/results/:sessionId" element={<Results />} />
+          </Routes>
+        </main>
+      )}
+>>>>>>> Stashed changes
     </div>
   )
 }

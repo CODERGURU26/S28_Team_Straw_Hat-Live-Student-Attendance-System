@@ -9,6 +9,7 @@ const MAX_PHOTOS = 5
 export default function Register() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [rollNumber, setRollNumber] = useState('')
   const [slots, setSlots] = useState(Array.from({ length: MAX_PHOTOS }, () => ({ file: null, preview: '', status: 'idle', error: '' })))
   const [loading, setLoading] = useState(false)
@@ -49,8 +50,13 @@ export default function Register() {
     const invalid = slots.some((s) => s.file && s.status === 'invalid')
     if (invalid) return toast.error('Please fix invalid photos before submitting')
 
+    if (!email.endsWith('@slrtce.in')) {
+      return toast.error('Only @slrtce.in emails are allowed')
+    }
+
     const formData = new FormData()
     formData.append('name', name)
+    formData.append('email', email)
     formData.append('roll_number', rollNumber)
     files.forEach((file) => formData.append('photos[]', file))
 
@@ -62,7 +68,7 @@ export default function Register() {
       clearInterval(timer)
       setProgress(100)
       toast.success(`Registered with ${res?.data?.photo_count || files.length} photos`)
-      navigate('/students')
+      navigate('/student-dashboard')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed')
     } finally {
@@ -77,6 +83,7 @@ export default function Register() {
       <p className="text-amber-600 text-sm">Add photos from different angles for better accuracy.</p>
 
       <input className="w-full p-3 rounded-lg border" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+      <input type="email" className="w-full p-3 rounded-lg border" placeholder="Email (@slrtce.in)" value={email} onChange={(e) => setEmail(e.target.value)} required pattern=".*@slrtce\.in$" title="Please use your @slrtce.in email address" />
       <input className="w-full p-3 rounded-lg border" placeholder="Roll Number" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} required />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

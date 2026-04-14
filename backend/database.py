@@ -14,12 +14,14 @@ _db = _client[DB_NAME]
 
 students_col = _db["students"]
 attendance_col = _db["attendance_records"]
+teachers_col = _db["teachers"]
 
 
 def _serialize_student(student: dict) -> dict:
     return {
         "id": str(student["_id"]),
         "name": student["name"],
+        "email": student.get("email"),
         "roll_number": student["roll_number"],
         "photo_path": student["photo_path"],
         "registration_photos": student.get("registration_photos", [student["photo_path"]]),
@@ -30,6 +32,7 @@ def _serialize_student(student: dict) -> dict:
 
 def create_student(
     name: str,
+    email: str,
     roll_number: str,
     photo_path: str,
     face_encoding: list[float],
@@ -43,6 +46,7 @@ def create_student(
 
     payload = {
         "name": name,
+        "email": email,
         "roll_number": roll_number,
         "photo_path": photo_path,
         "face_encoding": face_encoding,
@@ -55,6 +59,23 @@ def create_student(
 
     result = students_col.insert_one(payload)
     return str(result.inserted_id)
+
+
+def create_teacher(name: str, email: str, password_hash: str) -> str:
+    existing = teachers_col.find_one({"email": email})
+    if existing:
+        raise ValueError("Teacher with this email already exists")
+    
+    result = teachers_col.insert_one({
+        "name": name,
+        "email": email,
+        "password_hash": password_hash,
+        "registered_at": datetime.now(timezone.utc),
+    })
+    return str(result.inserted_id)
+
+def get_teacher_by_email(email: str) -> dict | None:
+    return teachers_col.find_one({"email": email})
 
 
 def get_students(include_encodings: bool = False) -> list[dict]:

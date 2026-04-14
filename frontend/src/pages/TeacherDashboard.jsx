@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { getSessions, getStudents } from '../api'
 import toast from 'react-hot-toast'
 
-export default function Home() {
+export default function TeacherDashboard() {
   const [students, setStudents] = useState([])
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -37,7 +37,7 @@ export default function Home() {
       </div>
       <div className="flex gap-3">
         <Link to="/take-attendance" className="px-4 py-2 rounded-lg bg-green-500 text-white">Take Attendance</Link>
-        <Link to="/register" className="px-4 py-2 rounded-lg bg-slate-900 text-white">Register Student</Link>
+        <Link to="/register/student" className="px-4 py-2 rounded-lg bg-slate-900 text-white">Register Student</Link>
       </div>
 
       <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">

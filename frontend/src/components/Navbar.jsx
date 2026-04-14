@@ -2,8 +2,8 @@ import { Link, NavLink } from 'react-router-dom'
 import { LayoutDashboard, UserPlus, Users, Camera } from 'lucide-react'
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/register', label: 'Register', icon: UserPlus },
+  { to: '/', label: 'Home Page', icon: LayoutDashboard },
+  { to: '/teacher-dashboard', label: 'Teacher Dashboard', icon: LayoutDashboard },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/take-attendance', label: 'Take Attendance', icon: Camera },
 ]

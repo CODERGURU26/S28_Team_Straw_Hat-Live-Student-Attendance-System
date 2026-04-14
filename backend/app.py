@@ -9,11 +9,13 @@ from bson import ObjectId
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 from database import (
     create_attendance_record,
     create_student,
+    create_teacher,
     delete_student,
     get_session_by_session_id,
     get_sessions,
@@ -88,11 +90,14 @@ def validate_student_photo():
 @app.route("/api/students/register", methods=["POST"])
 def register_student():
     name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip()
     roll_number = request.form.get("roll_number", "").strip()
     photos = _collect_photos_from_request()
 
-    if not name or not roll_number:
-        return jsonify({"success": False, "message": "name and roll_number are required"}), 400
+    if not name or not roll_number or not email:
+        return jsonify({"success": False, "message": "name, email, and roll_number are required"}), 400
+    if not email.endswith("@slrtce.in"):
+        return jsonify({"success": False, "message": "Email must end with @slrtce.in"}), 400
     if len(photos) == 0:
         return jsonify({"success": False, "message": "At least one photo is required"}), 400
     if len(photos) > 5:
@@ -108,6 +113,7 @@ def register_student():
 
         create_student(
             name=name,
+            email=email,
             roll_number=roll_number,
             photo_path=photo_paths[0],
             face_encoding=averaged,
@@ -124,6 +130,34 @@ def register_student():
                 "message": f"Student registered with {len(photo_paths)} photos",
             }
         ), 201
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"success": False, "message": f"Registration failed: {str(exc)}"}), 500
+
+
+@app.route("/api/teachers/register", methods=["POST"])
+def register_teacher():
+    data = request.json or {}
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
+
+    if not name or not email or not password:
+        return jsonify({"success": False, "message": "Name, email, and password are required"}), 400
+    
+    if not email.endswith("@slrtce.in"):
+        return jsonify({"success": False, "message": "Teacher email must end with @slrtce.in"}), 400
+
+    pwd_hash = generate_password_hash(password)
+    
+    try:
+        teacher_id = create_teacher(name, email, pwd_hash)
+        return jsonify({
+            "success": True, 
+            "teacher_id": teacher_id, 
+            "message": "Teacher registered successfully"
+        }), 201
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
     except Exception as exc:

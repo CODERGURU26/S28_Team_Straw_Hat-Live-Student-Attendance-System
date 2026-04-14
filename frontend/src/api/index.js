@@ -5,6 +5,7 @@ const api = axios.create({
 })
 
 export const registerStudent = (formData) => api.post('/students/register', formData)
+export const registerTeacher = (data) => api.post('/teachers/register', data)
 export const validateStudentPhoto = (formData) => api.post('/students/validate', formData)
 export const getStudents = () => api.get('/students')
 export const deleteStudent = (id) => api.delete(`/students/${id}`)

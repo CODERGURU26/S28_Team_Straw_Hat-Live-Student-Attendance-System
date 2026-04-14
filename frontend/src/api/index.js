@@ -22,6 +22,7 @@ export const updateSchedule = (id, data) => api.put(`/schedules/${id}`, data)
 export const deleteSchedule = (id) => api.delete(`/schedules/${id}`)
 export const getLeaderboard = () => api.get('/gamification/leaderboard')
 export const getStudentGamification = (id) => api.get(`/students/${id}/gamification`)
+export const getEscalationAlerts = () => api.get('/alerts/escalation')
 
 export const getSession = (sessionId) => api.get(`/attendance/session/${sessionId}`)
 export const exportSessionCsvUrl = (sessionId) => `${api.defaults.baseURL}/attendance/export/${sessionId}`

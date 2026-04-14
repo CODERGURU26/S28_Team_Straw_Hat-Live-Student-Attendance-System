@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getSessions, getStudents, getStudentAttendanceStats } from '../api'
+import { getSessions, getStudents, getStudentAttendanceStats, getEscalationAlerts } from '../api'
 import toast from 'react-hot-toast'
+import { AlertTriangle, Mail, MessageSquare, Phone, History, Info } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -21,19 +22,22 @@ export default function TeacherDashboard() {
   const [students, setStudents] = useState([])
   const [sessions, setSessions] = useState([])
   const [stats, setStats] = useState([])
+  const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [studentsRes, sessionsRes, statsRes] = await Promise.all([
+        const [studentsRes, sessionsRes, statsRes, alertsRes] = await Promise.all([
           getStudents(),
           getSessions(),
-          getStudentAttendanceStats()
+          getStudentAttendanceStats(),
+          getEscalationAlerts()
         ])
         setStudents(studentsRes.data)
         setSessions(sessionsRes.data)
         setStats(statsRes.data)
+        setAlerts(alertsRes.data)
       } catch {
         toast.error('Failed to load dashboard data')
       } finally {
@@ -129,6 +133,59 @@ export default function TeacherDashboard() {
       </div>
 
       <div>
+        <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+           <AlertTriangle className="text-amber-500" size={24} /> 
+           Student Absence Alerts & Escalations
+        </h2>
+
+        {alerts.length > 0 ? (
+          <div className="grid gap-4 mb-8">
+            {alerts.map((alert) => (
+              <div key={alert.student_id} className={`bg-white border-l-4 rounded-xl shadow-sm p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all hover:shadow-md ${
+                alert.color === 'red' ? 'border-red-500' :
+                alert.color === 'orange' ? 'border-orange-500' :
+                'border-yellow-400'
+              }`}>
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-full ${
+                    alert.color === 'red' ? 'bg-red-50 text-red-600' :
+                    alert.color === 'orange' ? 'bg-orange-50 text-orange-600' :
+                    'bg-yellow-50 text-yellow-600'
+                  }`}>
+                    {alert.level === 'Call Required' ? <Phone size={24} /> :
+                     alert.level === 'SMS' ? <MessageSquare size={24} /> :
+                     <Mail size={24} />}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-lg">{alert.name}</h4>
+                    <p className="text-sm text-slate-500">Roll: {alert.roll_number} • Missed <span className="font-bold text-slate-700">{alert.streak} sessions</span> in a row</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col md:items-end gap-2 w-full md:w-auto">
+                   <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        alert.color === 'red' ? 'bg-red-100 text-red-700' :
+                        alert.color === 'orange' ? 'bg-orange-100 text-orange-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {alert.action}
+                      </span>
+                   </div>
+                   <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <History size={12} />
+                      History: {alert.history.map(d => new Date(d).toLocaleDateString()).join(', ')}
+                   </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-6 text-center mb-8">
+             <p className="text-emerald-700 font-medium">Clear Skies! No students currently in the absence escalation loop.</p>
+          </div>
+        )}
+
         <h2 className="text-xl font-bold text-slate-800 mb-4">Attendance Analytics</h2>
 
         {/* --- Session Summary Cards --- */}

@@ -19,7 +19,9 @@ import {
   Medal,
   TrendingUp,
   Award,
-  Star
+  Star,
+  AlertOctagon,
+  Bell
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { 
@@ -170,6 +172,15 @@ export default function StudentDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
+            <div className="relative cursor-pointer hover:bg-slate-100 p-2 rounded-full transition-colors group" onClick={() => setActiveTab('schedule')}>
+              <Bell size={20} className="text-slate-500 group-hover:text-indigo-600" />
+              {schedules.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white animate-pulse">
+                  {schedules.length}
+                </span>
+              )}
+            </div>
+            
             <span className="hidden sm:inline text-sm font-medium text-slate-500">Student Portal</span>
             <button onClick={logout} className="p-2 ml-4 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2">
               <LogOut size={18} />
@@ -199,6 +210,25 @@ export default function StudentDashboard() {
             >
               View Schedule
             </button>
+          </div>
+        )}
+
+        {/* ─── Critical Absence Warning ─── */}
+        {gamification?.absence_streak > 3 && (
+          <div className="mb-6 bg-rose-50 border-2 border-rose-200 rounded-xl p-5 flex items-start gap-4 shadow-md animate-bounce-subtle">
+            <div className="bg-rose-100 text-rose-600 p-3 rounded-full flex-shrink-0">
+              <AlertOctagon size={28} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-rose-900 mb-1">Critical Absence Warning</h3>
+              <p className="text-rose-700 font-medium leading-relaxed">
+                You have been absent for <span className="font-extrabold">{gamification.absence_streak} consecutive sessions</span>. 
+                A notification has been sent to the faculty, and your teacher is required to contact your parents/guardians immediately.
+              </p>
+              <p className="text-rose-600 text-sm mt-2 flex items-center gap-1 font-semibold uppercase tracking-wider">
+                <Info size={14} /> Please contact your course coordinator as soon as possible.
+              </p>
+            </div>
           </div>
         )}
 

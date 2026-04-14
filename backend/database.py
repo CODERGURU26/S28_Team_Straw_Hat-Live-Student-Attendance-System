@@ -262,3 +262,18 @@ def get_weekly_leaderboard() -> list[dict]:
     student_stats.sort(key=lambda x: (x["percentage"], x["present"]), reverse=True)
     return student_stats[:5]
 
+
+def get_absence_streak(student_id: str) -> dict:
+    """Calculates consecutive 'absent' statuses and returns count + dates."""
+    records = get_student_attendance(student_id)
+    streak = 0
+    dates = []
+    # records are already sorted by timestamp desc in get_student_attendance
+    for r in records:
+        if r["status"] == "absent":
+            streak += 1
+            dates.append(r["timestamp"])
+        else:
+            break
+    return {"streak": streak, "dates": dates}
+

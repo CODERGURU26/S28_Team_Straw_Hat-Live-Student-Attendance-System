@@ -31,6 +31,7 @@ from database import (
     delete_schedule,
     get_student_streak,
     get_weekly_leaderboard,
+    get_absence_streak,
 )
 from face_utils import average_encodings, detect_faces_and_match, encode_face
 
@@ -543,12 +544,57 @@ def student_gamification(student_id):
             badge = "Bronze"
             next_threshold = 75
             
+        # Get absence streak for warnings
+        absence_res = get_absence_streak(student_id)
+        absence_streak = absence_res["streak"]
+            
         return jsonify({
             "streak": streak,
+            "absence_streak": absence_streak,
             "badge": badge,
             "percentage": percentage,
             "next_threshold": next_threshold
         }), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/alerts/escalation", methods=["GET"])
+def escalation_alerts():
+    try:
+        students = get_students()
+        alerts = []
+        for s in students:
+            sid = s.get("id") or str(s.get("_id"))
+            res = get_absence_streak(sid)
+            streak = res["streak"]
+            if streak >= 1:
+                level = "Email"
+                color = "yellow"
+                action = "Day 1 Intervention (Email)"
+                
+                if streak >= 5:
+                    level = "Call Required"
+                    color = "red"
+                    action = "Day 5 Critical (Phone Call)"
+                elif streak >= 3:
+                    level = "SMS"
+                    color = "orange"
+                    action = "Day 3 Escalation (SMS)"
+                
+                alerts.append({
+                    "student_id": sid,
+                    "name": s["name"],
+                    "roll_number": s["roll_number"],
+                    "streak": streak,
+                    "level": level,
+                    "color": color,
+                    "action": action,
+                    "history": res["dates"]
+                })
+        
+        # Sort by streak desc
+        alerts.sort(key=lambda x: x["streak"], reverse=True)
+        return jsonify(alerts), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 

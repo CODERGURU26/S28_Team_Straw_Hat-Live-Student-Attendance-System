@@ -204,3 +204,61 @@ def delete_schedule(schedule_id: str) -> bool:
     result = schedules_col.delete_one({"_id": ObjectId(schedule_id)})
     return result.deleted_count > 0
 
+
+def get_student_streak(student_id: str) -> int:
+    """Calculates consecutive 'present' statuses from newest to oldest."""
+    records = get_student_attendance(student_id)
+    streak = 0
+    # records are already sorted by timestamp desc in get_student_attendance
+    for r in records:
+        if r["status"] == "present":
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def get_weekly_leaderboard() -> list[dict]:
+    """Calculate top 5 students for the current calendar week."""
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    # Start of week (Monday)
+    start_of_week = now - timedelta(days=now.weekday())
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    sessions = list(attendance_col.find({"timestamp": {"$gte": start_of_week}}))
+    if not sessions:
+        return []
+
+    # Count attendance per student this week
+    students = list(students_col.find({}, {"name": 1, "roll_number": 1}))
+    student_stats = []
+
+    for s in students:
+        sid = str(s["_id"])
+        total_week_sessions = 0
+        present_week_sessions = 0
+
+        for sess in sessions:
+            present_ids = {str(r.get("student_id", "")) for r in sess.get("results", []) if r.get("status") == "present"}
+            absent_ids = {str(a.get("student_id", "")) for a in sess.get("absent_students", [])}
+            
+            if sid in present_ids:
+                total_week_sessions += 1
+                present_week_sessions += 1
+            elif sid in absent_ids:
+                total_week_sessions += 1
+
+        if total_week_sessions > 0:
+            percentage = round((present_week_sessions / total_week_sessions) * 100, 1)
+            student_stats.append({
+                "name": s["name"],
+                "percentage": percentage,
+                "present": present_week_sessions,
+                "total": total_week_sessions
+            })
+
+    # Sort by percentage desc, then present count desc
+    student_stats.sort(key=lambda x: (x["percentage"], x["present"]), reverse=True)
+    return student_stats[:5]
+

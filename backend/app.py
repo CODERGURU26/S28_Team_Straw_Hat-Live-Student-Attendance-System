@@ -29,6 +29,8 @@ from database import (
     get_schedules,
     update_schedule,
     delete_schedule,
+    get_student_streak,
+    get_weekly_leaderboard,
 )
 from face_utils import average_encodings, detect_faces_and_match, encode_face
 
@@ -509,14 +511,44 @@ def edit_schedule(schedule_id):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
-@app.route("/api/schedules/<schedule_id>", methods=["DELETE"])
-def remove_schedule(schedule_id):
+@app.route("/api/gamification/leaderboard", methods=["GET"])
+def leaderboard():
+    return jsonify(get_weekly_leaderboard()), 200
+
+
+@app.route("/api/students/<student_id>/gamification", methods=["GET"])
+def student_gamification(student_id):
     try:
-        deleted = delete_schedule(schedule_id)
-        if deleted:
-            return jsonify({"success": True}), 200
-        else:
-            return jsonify({"success": False, "message": "Schedule not found"}), 404
+        student = get_student_by_id(student_id)
+        if not student:
+            return jsonify({"success": False, "message": "Student not found"}), 404
+        
+        streak = get_student_streak(student_id)
+        
+        # Get overall percentage for badges
+        records = get_student_attendance(student_id)
+        total = len(records)
+        present = sum(1 for r in records if r["status"] == "present")
+        percentage = round((present / total) * 100, 1) if total > 0 else 0
+        
+        badge = "None"
+        next_threshold = 50
+        if percentage >= 90:
+            badge = "Gold"
+            next_threshold = 100
+        elif percentage >= 75:
+            badge = "Silver"
+            next_threshold = 90
+        elif percentage >= 50:
+            badge = "Bronze"
+            next_threshold = 75
+            
+        return jsonify({
+            "streak": streak,
+            "badge": badge,
+            "percentage": percentage,
+            "next_threshold": next_threshold
+        }), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 

@@ -1,11 +1,34 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  LogOut, User, CalendarCheck, CalendarX, Camera, ChevronRight, CheckCircle2,
-  Clock, ScanFace, Upload, XCircle, Info, Calendar, MapPin
+  LogOut,
+  User,
+  CalendarCheck,
+  CalendarX,
+  Camera,
+  ChevronRight,
+  CheckCircle2,
+  Clock,
+  ScanFace,
+  Upload,
+  XCircle,
+  Info,
+  Calendar,
+  MapPin,
+  Trophy,
+  Medal,
+  TrendingUp,
+  Award,
+  Star
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { getStudentAttendance, addStudentPhotos, getSchedules } from '../api'
+import { 
+  getStudentAttendance, 
+  addStudentPhotos, 
+  getSchedules, 
+  getLeaderboard, 
+  getStudentGamification 
+} from '../api'
 
 const API_BASE = 'http://localhost:5000'
 
@@ -14,6 +37,8 @@ export default function StudentDashboard() {
   const [student, setStudent] = useState(null)
   const [attendance, setAttendance] = useState(null)
   const [schedules, setSchedules] = useState([])
+  const [gamification, setGamification] = useState(null)
+  const [leaderboard, setLeaderboard] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -34,13 +59,18 @@ export default function StudentDashboard() {
 
     const loadData = async () => {
       try {
-        const [attRes, schedRes] = await Promise.all([
+        const [attRes, schedRes, gamificationRes, leaderboardRes] = await Promise.all([
           getStudentAttendance(parsed.id),
-          getSchedules()
+          getSchedules(),
+          getStudentGamification(parsed.id),
+          getLeaderboard()
         ])
         setAttendance(attRes.data)
         setSchedules(schedRes.data)
-      } catch {
+        setGamification(gamificationRes.data)
+        setLeaderboard(leaderboardRes.data)
+      } catch (err) {
+        console.error(err)
         toast.error('Failed to load dashboard data')
       } finally {
         setLoading(false)
@@ -188,13 +218,27 @@ export default function StudentDashboard() {
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
               {student.name}
             </h1>
-            <div className="flex flex-col md:flex-row gap-2 md:gap-6 text-slate-500 text-sm">
-              <span className="flex items-center gap-1 justify-center md:justify-start">
+            <div className="flex flex-col md:flex-row gap-2 md:gap-6 text-slate-500 text-sm items-center md:items-start">
+              <span className="flex items-center gap-1">
                 <span className="font-semibold text-slate-700">Roll No:</span> {student.roll_number}
               </span>
-              <span className="flex items-center gap-1 justify-center md:justify-start">
+              <span className="flex items-center gap-1">
                 <span className="font-semibold text-slate-700">Email:</span> {student.email}
               </span>
+              {gamification?.badge !== 'None' && (
+                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${
+                  gamification.badge === 'Gold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  gamification.badge === 'Silver' ? 'bg-slate-50 text-slate-700 border-slate-200' :
+                  'bg-orange-50 text-orange-700 border-orange-200'
+                }`}>
+                  <Trophy size={12} /> {gamification.badge} Badge
+                </span>
+              )}
+              {gamification?.streak > 0 && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                  <TrendingUp size={12} /> {gamification.streak} Day Streak
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -285,27 +329,95 @@ export default function StudentDashboard() {
 
           {activeTab === 'overview' && (
             <div className="grid lg:grid-cols-3 gap-6">
+              
+              <div className="lg:col-span-1 space-y-6">
+                {/* Circular Progress */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col items-center justify-center">
+                  <h3 className="text-slate-600 font-semibold mb-6 self-start w-full">Attendance Rate</h3>
 
-              {/* Circular Progress */}
-              <div className="lg:col-span-1 bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col items-center justify-center">
-                <h3 className="text-slate-600 font-semibold mb-6 self-start w-full">Attendance Rate</h3>
-
-                <div className="relative w-48 h-48 flex items-center justify-center">
-                  <svg className="w-full h-full -rotate-90" viewBox="0 0 160 160">
-                    <circle cx="80" cy="80" r="70" fill="none" strokeWidth="12" className="stroke-slate-100" />
-                    <circle
-                      cx="80" cy="80" r="70" fill="none" strokeWidth="12"
-                      strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 70}`}
-                      strokeDashoffset={`${2 * Math.PI * 70 * (1 - (stats?.percentage ?? 0) / 100)}`}
-                      className={`${(stats?.percentage ?? 0) >= 75 ? 'stroke-emerald-500' : (stats?.percentage ?? 0) >= 50 ? 'stroke-amber-400' : 'stroke-rose-500'} transition-all duration-1000 origin-center`}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-4xl font-bold text-slate-800">
-                      {stats?.percentage ?? 0}<span className="text-xl ml-1 text-slate-500">%</span>
-                    </span>
+                  <div className="relative w-48 h-48 flex items-center justify-center">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 160 160">
+                      <circle cx="80" cy="80" r="70" fill="none" strokeWidth="12" className="stroke-slate-100" />
+                      <circle
+                        cx="80" cy="80" r="70" fill="none" strokeWidth="12"
+                        strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 70}`}
+                        strokeDashoffset={`${2 * Math.PI * 70 * (1 - (stats?.percentage ?? 0) / 100)}`}
+                        className={`${(stats?.percentage ?? 0) >= 75 ? 'stroke-emerald-500' : (stats?.percentage ?? 0) >= 50 ? 'stroke-amber-400' : 'stroke-rose-500'} transition-all duration-1000 origin-center`}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-4xl font-bold text-slate-800">
+                        {stats?.percentage ?? 0}<span className="text-xl ml-1 text-slate-500">%</span>
+                      </span>
+                    </div>
                   </div>
+                </div>
+
+                {/* Gamification Panel */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                   <h3 className="text-slate-600 font-semibold mb-4 flex items-center gap-2">
+                     <Award className="text-indigo-600" size={18} /> Achievement Progress
+                   </h3>
+                   
+                   <div className="space-y-4">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-slate-500 font-medium">To {gamification?.badge === 'Gold' ? 'Perfect Score' : gamification?.badge === 'Silver' ? 'Gold Badge' : gamification?.badge === 'Bronze' ? 'Silver Badge' : 'Bronze Badge'}</span>
+                        <span className="text-indigo-600 font-bold">{stats?.percentage ?? 0}% / {gamification?.next_threshold ?? 50}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                        <div 
+                          className="bg-indigo-600 h-full transition-all duration-1000"
+                          style={{ width: `${Math.min(100, ((stats?.percentage ?? 0) / (gamification?.next_threshold || 50)) * 100)}%` }}
+                        ></div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-2">
+                        <div className={`flex flex-col items-center p-2 rounded-lg border ${ (stats?.percentage ?? 0) >= 50 ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100 grayscale' }`}>
+                          <Medal size={20} className={ (stats?.percentage ?? 0) >= 50 ? 'text-orange-600' : 'text-slate-400' } />
+                          <span className="text-[10px] font-bold mt-1">BRONZE</span>
+                        </div>
+                        <div className={`flex flex-col items-center p-2 rounded-lg border ${ (stats?.percentage ?? 0) >= 75 ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-100 grayscale' }`}>
+                          <Medal size={20} className={ (stats?.percentage ?? 0) >= 75 ? 'text-slate-600' : 'text-slate-400' } />
+                          <span className="text-[10px] font-bold mt-1">SILVER</span>
+                        </div>
+                        <div className={`flex flex-col items-center p-2 rounded-lg border ${ (stats?.percentage ?? 0) >= 90 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100 grayscale' }`}>
+                          <Trophy size={20} className={ (stats?.percentage ?? 0) >= 90 ? 'text-amber-600' : 'text-slate-400' } />
+                          <span className="text-[10px] font-bold mt-1">GOLD</span>
+                        </div>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Weekly Leaderboard */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                   <h3 className="text-slate-600 font-semibold mb-4 flex items-center gap-2">
+                     <Star className="text-amber-500" size={18} /> Weekly Top Performers
+                   </h3>
+                   <div className="space-y-3">
+                      {leaderboard.length === 0 ? (
+                        <p className="text-slate-400 text-xs text-center py-4 italic">No rankings available yet this week.</p>
+                      ) : (
+                        leaderboard.map((entry, idx) => (
+                          <div key={idx} className={`flex items-center justify-between p-2 rounded-lg transition-colors ${ entry.name === student.name ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-slate-50' }`}>
+                            <div className="flex items-center gap-3">
+                              <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
+                                idx === 0 ? 'bg-amber-100 text-amber-700' :
+                                idx === 1 ? 'bg-slate-200 text-slate-700' :
+                                idx === 2 ? 'bg-orange-100 text-orange-700' :
+                                'bg-slate-100 text-slate-500'
+                              }`}>
+                                {idx + 1}
+                              </span>
+                              <span className={`text-sm font-medium ${entry.name === student.name ? 'text-indigo-900' : 'text-slate-700'}`}>
+                                {entry.name} {entry.name === student.name && '(You)'}
+                              </span>
+                            </div>
+                            <span className="text-xs font-bold text-slate-600">{entry.percentage}%</span>
+                          </div>
+                        ))
+                      )}
+                   </div>
                 </div>
               </div>
 

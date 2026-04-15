@@ -55,9 +55,7 @@ for folder in [UPLOAD_FOLDER, STUDENT_PHOTO_FOLDER]:
     os.makedirs(folder, exist_ok=True)
 
 app = Flask(__name__, static_url_path="/static", static_folder="static")
-# TODO: replace * with your Vercel URL after first deploy
-# e.g. origins=["https://your-app.vercel.app"]
-CORS(app, origins="*", supports_credentials=True)
+CORS(app, origins=["https://s28-team-straw-hat-live-student-att-swart.vercel.app"], supports_credentials=True)
 
 def full_url(path):
     base = os.environ.get("BACKEND_URL", "https://rcn16f04-5000.inc1.devtunnels.ms")

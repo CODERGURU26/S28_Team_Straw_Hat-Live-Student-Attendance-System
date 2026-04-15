@@ -510,30 +510,41 @@ def student_attendance(student_id):
 
 @app.route("/api/students/attendance-stats", methods=["GET"])
 def all_student_attendance_stats():
+    sessions = get_sessions()
+    if not sessions:
+        return jsonify([])
+
     students = get_students(include_encodings=False)
     if not students:
         return jsonify([])
-        
+
+    total_sessions = len(sessions)
     stats = []
-    # Optionally get total sessions length if not derivable from getting student records.
-    # But get_student_attendance gives total for that student.
-    
+
     for s in students:
         sid = str(s.get("id") or s.get("_id", ""))
-        records = get_student_attendance(sid)
-        total = len(records)
-        present = sum(1 for r in records if r["status"] == "present")
-        percentage = round((present / total) * 100, 1) if total > 0 else 0
-        
+        present = 0
+
+        for session in sessions:
+            present_ids = {
+                str(result.get("student_id", ""))
+                for result in session.get("results", [])
+                if result.get("status") == "present"
+            }
+            if sid in present_ids:
+                present += 1
+
+        percentage = round((present / total_sessions) * 100, 1) if total_sessions > 0 else 0
+
         stats.append({
             "student_id": sid,
             "name": s["name"],
             "roll_number": s["roll_number"],
             "present_count": present,
-            "total_sessions": total,
+            "total_sessions": total_sessions,
             "percentage": percentage
         })
-        
+
     return jsonify(stats)
 
 

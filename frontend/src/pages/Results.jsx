@@ -111,7 +111,7 @@ export default function Results() {
     const styles = getConfidenceStyles(confidence)
 
     return (
-      <div className="min-w-32 space-y-1">
+      <div className="w-32 space-y-1">
         <div className={`text-xs font-semibold ${styles.text}`}>{confidence.toFixed(1)}%</div>
         <div className={`h-2 overflow-hidden rounded-full ${styles.track}`}>
           <div
@@ -162,7 +162,7 @@ export default function Results() {
             </div>
           )}
 
-          <div className="bg-white rounded-lg border overflow-hidden">
+          <div className="bg-white rounded-lg border overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-100">
                 <tr>

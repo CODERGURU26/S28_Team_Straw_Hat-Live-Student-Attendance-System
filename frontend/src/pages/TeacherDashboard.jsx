@@ -18,6 +18,28 @@ import {
   ReferenceLine
 } from 'recharts'
 
+function formatSessionDate(value) {
+  if (!value) return 'N/A'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'N/A'
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function AttendanceOverTimeTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+
+  const session = payload[0]?.payload
+  if (!session) return null
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <p className="text-sm font-semibold text-slate-800">
+        {session.fullDate} — {session.present} present out of {session.total}
+      </p>
+    </div>
+  )
+}
+
 export default function TeacherDashboard() {
   const [students, setStudents] = useState([])
   const [sessions, setSessions] = useState([])
@@ -51,16 +73,19 @@ export default function TeacherDashboard() {
 
   // --- CHART 1: Attendance Over Time ---
   const lineChartData = useMemo(() => {
-    // Last 10 sessions, but chronological (oldest to newest left to right)
     return sessions.slice(0, 10).reverse().map(s => ({
-      date: new Date(s.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      date: formatSessionDate(s.date || s.timestamp),
+      fullDate: new Date(s.date || s.timestamp).toLocaleDateString(),
       present: s.present_count,
+      total: students.length,
     }))
-  }, [sessions])
+  }, [sessions, students.length])
 
   // --- CHART 2: Per Student Attendance Rate ---
   const barChartData = useMemo(() => {
-    return stats.map(s => ({
+    return [...stats]
+      .sort((a, b) => b.percentage - a.percentage || a.name.localeCompare(b.name))
+      .map(s => ({
       name: s.name,
       percentage: s.percentage,
       present_count: s.present_count,
@@ -76,7 +101,7 @@ export default function TeacherDashboard() {
 
   // --- CHART 3: Session Summary Stats ---
   const sessionSummary = useMemo(() => {
-    if (sessions.length === 0 || stats.length === 0) return null
+    if (sessions.length === 0) return null
 
     let bestSession = sessions[0]
     let worstSession = sessions[0]
@@ -86,9 +111,9 @@ export default function TeacherDashboard() {
       if (s.present_count < worstSession.present_count) worstSession = s
     })
 
-    let mostAbsent = stats[0]
+    let mostAbsent = stats[0] || null
     stats.forEach(s => {
-      if ((s.total_sessions - s.present_count) > (mostAbsent.total_sessions - mostAbsent.present_count)) {
+      if (!mostAbsent || (s.total_sessions - s.present_count) > (mostAbsent.total_sessions - mostAbsent.present_count)) {
         mostAbsent = s
       }
     })
@@ -99,16 +124,16 @@ export default function TeacherDashboard() {
 
     return {
       best: {
-        date: new Date(bestSession.timestamp).toLocaleDateString(),
+        date: new Date(bestSession.date || bestSession.timestamp).toLocaleDateString(),
         count: bestSession.present_count
       },
       worst: {
-        date: new Date(worstSession.timestamp).toLocaleDateString(),
+        date: new Date(worstSession.date || worstSession.timestamp).toLocaleDateString(),
         count: worstSession.present_count
       },
       absentStudent: {
-        name: mostAbsent.name,
-        missed: mostAbsent.total_sessions - mostAbsent.present_count
+        name: mostAbsent?.name || 'N/A',
+        missed: mostAbsent ? (mostAbsent.total_sessions - mostAbsent.present_count) : 0
       },
       avgAttendance
     }
@@ -188,7 +213,6 @@ export default function TeacherDashboard() {
 
         <h2 className="text-xl font-bold text-slate-800 mb-4">Attendance Analytics</h2>
 
-        {/* --- Session Summary Cards --- */}
         {sessionSummary && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <StatCard 
@@ -215,9 +239,8 @@ export default function TeacherDashboard() {
         )}
 
         <div className="space-y-6">
-          {/* --- Line Chart --- */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-semibold text-slate-700 mb-6">Attendance Over Time (Last 10 Sessions)</h3>
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h3 className="text-lg font-semibold text-slate-700 mb-6">Attendance Over Time</h3>
             {sessions.length > 0 ? (
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -237,9 +260,7 @@ export default function TeacherDashboard() {
                       domain={[0, students.length]}
                     />
                     <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      formatter={(value) => [`${value} present out of ${students.length}`, 'Attendance']}
-                      labelStyle={{ color: '#475569', fontWeight: 'bold', marginBottom: '4px' }}
+                      content={<AttendanceOverTimeTooltip />}
                     />
                     <ReferenceLine 
                       y={students.length} 
@@ -250,10 +271,10 @@ export default function TeacherDashboard() {
                     <Line 
                       type="monotone" 
                       dataKey="present" 
-                      stroke="#6366f1" 
+                      stroke="#2563eb" 
                       strokeWidth={3}
-                      activeDot={{ r: 6, fill: '#4f46e5' }}
-                      dot={{ r: 4, fill: '#6366f1', strokeWidth: 0 }}
+                      activeDot={{ r: 6, fill: '#1d4ed8' }}
+                      dot={{ r: 4, fill: '#2563eb', strokeWidth: 0 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -263,50 +284,51 @@ export default function TeacherDashboard() {
             )}
           </div>
 
-          {/* --- Bar Chart --- */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
             <h3 className="text-lg font-semibold text-slate-700 mb-6">Per Student Attendance Rate</h3>
             {stats.length > 0 ? (
-              <div className="w-full" style={{ height: `${Math.max(300, stats.length * 40)}px` }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart 
-                    data={barChartData} 
-                    layout="vertical" 
-                    margin={{ top: 0, right: 30, left: 20, bottom: 0 }}
-                    barCategoryGap={10}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                    <XAxis 
-                      type="number" 
-                      domain={[0, 100]} 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#64748b', fontSize: 12 }}
-                      tickFormatter={(value) => `${value}%`}
-                    />
-                    <YAxis 
-                      type="category" 
-                      dataKey="name" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
-                      width={120}
-                    />
-                    <Tooltip 
-                      cursor={{ fill: '#f8fafc' }}
-                      contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      formatter={(value, name, props) => {
-                        return [`${value}% (${props.payload.present_count}/${props.payload.total_sessions} sessions)`, 'Attendance']
-                      }}
-                    />
-                    <Bar dataKey="percentage" radius={[0, 4, 4, 0]}>
-                      {barChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={getBarColor(entry.percentage)} />
-                      ))}
-                      <LabelList dataKey="percentage" position="right" formatter={(val) => `${val}%`} fill="#64748b" fontSize={12} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className={stats.length > 10 ? 'max-h-[480px] overflow-y-auto pr-2' : ''}>
+                <div className="w-full" style={{ height: `${Math.max(320, stats.length * 44)}px` }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={barChartData} 
+                      layout="vertical" 
+                      margin={{ top: 0, right: 30, left: 20, bottom: 0 }}
+                      barCategoryGap={10}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                      <XAxis 
+                        type="number" 
+                        domain={[0, 100]} 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#64748b', fontSize: 12 }}
+                        tickFormatter={(value) => `${value}%`}
+                      />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
+                        width={120}
+                      />
+                      <Tooltip 
+                        cursor={{ fill: '#f8fafc' }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value, name, props) => {
+                          return [`${value}% (${props.payload.present_count}/${props.payload.total_sessions} sessions)`, 'Attendance']
+                        }}
+                      />
+                      <Bar dataKey="percentage" radius={[0, 4, 4, 0]}>
+                        {barChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getBarColor(entry.percentage)} />
+                        ))}
+                        <LabelList dataKey="percentage" position="right" formatter={(val) => `${val}%`} fill="#64748b" fontSize={12} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             ) : (
               <p className="text-slate-500 text-sm py-10 text-center">No student data available yet.</p>
@@ -321,7 +343,7 @@ export default function TeacherDashboard() {
 
 function StatCard({ title, value, subtitle }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div className="bg-white rounded-xl shadow-sm p-6">
       <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">{title}</p>
       <p className="text-2xl font-bold text-slate-800 mt-2">{value}</p>
       {subtitle && <p className="text-slate-500 text-sm mt-1">{subtitle}</p>}

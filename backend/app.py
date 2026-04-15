@@ -55,7 +55,18 @@ for folder in [UPLOAD_FOLDER, STUDENT_PHOTO_FOLDER]:
     os.makedirs(folder, exist_ok=True)
 
 app = Flask(__name__, static_url_path="/static", static_folder="static")
-CORS(app, origins=["https://s28-team-straw-hat-live-student-att-swart.vercel.app"], supports_credentials=True)
+
+CORS(app, 
+     resources={r"/*": {"origins": "*"}},
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=True)
+
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        response = app.make_default_options_response()
+        return response
 
 def full_url(path):
     base = os.environ.get("BACKEND_URL", "https://rcn16f04-5000.inc1.devtunnels.ms")

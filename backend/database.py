@@ -224,6 +224,8 @@ def update_session_student_status(session_id: str, student_id: str, new_status: 
             "name": student_info.get("name", ""),
             "roll_number": student_info.get("roll_number", ""),
             "status": "present",
+            "confidence": None,
+            "matched": False,
             "bbox": []
         })
     elif new_status == "absent":

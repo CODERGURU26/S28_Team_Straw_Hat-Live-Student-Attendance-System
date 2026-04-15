@@ -91,6 +91,7 @@ def _build_match_result(
 
 def annotate_image(image: np.ndarray, recognition_results: list[dict]) -> np.ndarray:
     annotated_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    image_height, image_width = annotated_image.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.6
     thickness = 2
@@ -115,11 +116,18 @@ def annotate_image(image: np.ndarray, recognition_results: list[dict]) -> np.nda
             font_scale,
             thickness,
         )
+        label_height = text_height + (text_padding_y * 2) + baseline
+        label_width = text_width + (text_padding_x * 2)
 
-        label_left = left
-        label_top = max(0, top - text_height - (text_padding_y * 2) - baseline)
-        label_right = left + text_width + (text_padding_x * 2)
-        label_bottom = top
+        label_left = max(0, min(left, image_width - label_width))
+        label_right = min(image_width, label_left + label_width)
+
+        if top >= label_height:
+            label_top = top - label_height
+            label_bottom = top
+        else:
+            label_top = top
+            label_bottom = min(image_height, top + label_height)
 
         cv2.rectangle(
             annotated_image,
@@ -131,7 +139,7 @@ def annotate_image(image: np.ndarray, recognition_results: list[dict]) -> np.nda
         cv2.putText(
             annotated_image,
             label,
-            (label_left + text_padding_x, label_bottom - text_padding_y),
+            (label_left + text_padding_x, label_bottom - text_padding_y - baseline),
             font,
             font_scale,
             (255, 255, 255),

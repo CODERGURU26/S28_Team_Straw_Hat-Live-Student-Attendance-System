@@ -26,6 +26,7 @@ export const getEscalationAlerts = () => api.get('/alerts/escalation')
 
 export const getSession = (sessionId) => api.get(`/attendance/session/${sessionId}`)
 export const exportSessionCsvUrl = (sessionId) => `${api.defaults.baseURL}/attendance/export/${sessionId}`
+export const updateAttendanceStatus = (sessionId, data) => api.post(`/attendance/session/${sessionId}/update-student`, data)
 
 export const studentLogin = (email) => api.post('/students/login', { email })
 export const getStudentAttendance = (studentId) => api.get(`/students/${studentId}/attendance`)

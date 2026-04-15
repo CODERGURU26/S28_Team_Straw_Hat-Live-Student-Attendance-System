@@ -32,6 +32,7 @@ from database import (
     get_student_streak,
     get_weekly_leaderboard,
     get_absence_streak,
+    update_session_student_status,
 )
 from face_utils import average_encodings, detect_faces_and_match, encode_face
 
@@ -299,6 +300,8 @@ def take_attendance():
         if str(s["_id"]) not in present_ids
     ]
 
+    schedule_id = request.form.get("schedule_id")
+
     session_id = uuid.uuid4().hex
     record = {
         "session_id": session_id,
@@ -308,6 +311,9 @@ def take_attendance():
         "results": recognition_results,
         "absent_students": absent_students,
     }
+    if schedule_id:
+        record["schedule_id"] = schedule_id
+        
     create_attendance_record(record)
 
     return jsonify(
@@ -316,6 +322,16 @@ def take_attendance():
             "present": present_students,
             "absent": absent_students,
             "unknown_count": sum(1 for r in recognition_results if r["status"] == "unknown"),
+            "results": [
+                {
+                    "student_id": result.get("student_id"),
+                    "name": result.get("name"),
+                    "status": result.get("status"),
+                    "confidence": result.get("confidence"),
+                    "bbox": result.get("bbox", []),
+                }
+                for result in recognition_results
+            ],
             "annotated_image_url": f"/static/{record['annotated_image_path']}",
         }
     )
@@ -354,6 +370,7 @@ def attendance_sessions():
             "present_count": present_count,
             "unknown_count": unknown_count,
             "absent_count": len(s.get("absent_students", [])),
+            "schedule_id": s.get("schedule_id"),
         })
 
     return jsonify(summaries)
@@ -373,11 +390,34 @@ def attendance_session(session_id):
             "session_id": session["session_id"],
             "date": session["date"],
             "timestamp": session["timestamp"],
+            "schedule_id": session.get("schedule_id"),
             "annotated_image_url": f"/static/{session['annotated_image_path']}",
             "results": session.get("results", []),
             "absent_students": session.get("absent_students", []),
         }
     )
+
+@app.route("/api/attendance/session/<session_id>/update-student", methods=["POST"])
+def update_student_status(session_id):
+    data = request.json or {}
+    student_id = data.get("student_id")
+    status = data.get("status")
+    if not student_id or not status:
+        return jsonify({"success": False, "message": "student_id and status are required"}), 400
+
+    student_info = {
+        "name": data.get("name", ""),
+        "roll_number": data.get("roll_number", "")
+    }
+
+    try:
+        updated = update_session_student_status(session_id, student_id, status, student_info)
+        if updated:
+            return jsonify({"success": True}), 200
+        else:
+            return jsonify({"success": False, "message": "Session not found or update failed"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route("/api/attendance/export/<session_id>", methods=["GET"])

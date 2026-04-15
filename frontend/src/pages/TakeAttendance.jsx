@@ -1,19 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { takeAttendance } from '../api'
+import { takeAttendance, getSchedules } from '../api'
 
 export default function TakeAttendance() {
   const navigate = useNavigate()
   const [photo, setPhoto] = useState(null)
   const [preview, setPreview] = useState('')
   const [loading, setLoading] = useState(false)
+  const [schedules, setSchedules] = useState([])
+  const [scheduleId, setScheduleId] = useState('')
+
+  useEffect(() => {
+    getSchedules()
+      .then(res => setSchedules(res.data))
+      .catch(err => toast.error('Failed to load schedules'))
+  }, [])
 
   const submit = async () => {
     if (!photo) return toast.error('Please select a group photo')
 
     const formData = new FormData()
     formData.append('group_photo', photo)
+    if (scheduleId) {
+      formData.append('schedule_id', scheduleId)
+    }
 
     try {
       setLoading(true)
@@ -30,6 +41,25 @@ export default function TakeAttendance() {
   return (
     <div className="space-y-4 max-w-2xl">
       <h1 className="text-2xl font-bold">Take Attendance</h1>
+      
+      {schedules.length > 0 && (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-slate-700">Link Schedule (Optional)</label>
+          <select 
+            value={scheduleId} 
+            onChange={e => setScheduleId(e.target.value)}
+            className="w-full p-2 border rounded-lg bg-white"
+          >
+            <option value="">-- No Schedule --</option>
+            {schedules.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.subject} ({s.type}) - {s.day_of_week} {s.time}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <label className="block border-2 border-dashed border-slate-300 rounded-xl p-6 bg-white cursor-pointer">
         <input type="file" className="hidden" accept="image/*" onChange={(e) => {
           const file = e.target.files?.[0]

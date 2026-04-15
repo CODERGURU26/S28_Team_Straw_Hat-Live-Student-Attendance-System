@@ -210,6 +210,36 @@ def get_student_attendance(student_id: str) -> list[dict]:
     return result
 
 
+def update_session_student_status(session_id: str, student_id: str, new_status: str, student_info: dict) -> bool:
+    session = get_session_by_session_id(session_id)
+    if not session:
+        return False
+
+    new_results = [r for r in session.get("results", []) if str(r.get("student_id")) != student_id]
+    new_absent = [a for a in session.get("absent_students", []) if str(a.get("student_id")) != student_id]
+
+    if new_status == "present":
+        new_results.append({
+            "student_id": student_id,
+            "name": student_info.get("name", ""),
+            "roll_number": student_info.get("roll_number", ""),
+            "status": "present",
+            "bbox": []
+        })
+    elif new_status == "absent":
+        new_absent.append({
+            "student_id": student_id,
+            "name": student_info.get("name", ""),
+            "roll_number": student_info.get("roll_number", "")
+        })
+    
+    result = attendance_col.update_one(
+        {"_id": ObjectId(session["id"])},
+        {"$set": {"results": new_results, "absent_students": new_absent}}
+    )
+    return result.modified_count > 0
+
+
 # ---------------- SCHEDULES ---------------- #
 
 def create_schedule(data: dict) -> str:

@@ -37,6 +37,110 @@ def extract_single_face_encoding(image_path: str) -> list[float]:
 
 # ---------------- FACE DETECTION + MATCH ---------------- #
 
+def _build_match_result(
+    face_encoding: np.ndarray,
+    known_encodings: list[np.ndarray],
+    known_students: list[dict],
+) -> dict:
+    if not known_encodings:
+        return {
+            "student_id": None,
+            "name": "Unknown",
+            "roll_number": "",
+            "confidence": 0,
+            "matched": False,
+            "status": "unknown",
+        }
+
+    face_distances = face_recognition.face_distance(known_encodings, face_encoding)
+
+    if len(face_distances) == 0:
+        return {
+            "student_id": None,
+            "name": "Unknown",
+            "roll_number": "",
+            "confidence": 0,
+            "matched": False,
+            "status": "unknown",
+        }
+
+    best_idx = int(np.argmin(face_distances))
+    distance = float(face_distances[best_idx])
+    confidence = round(max(0.0, min(1.0, 1 - distance)) * 100, 1)
+
+    if distance <= MATCH_TOLERANCE:
+        matched_student = known_students[best_idx]
+        return {
+            "student_id": str(matched_student.get("_id")),
+            "name": matched_student.get("name", "Unknown"),
+            "roll_number": matched_student.get("roll_number", ""),
+            "confidence": confidence,
+            "matched": True,
+            "status": "present",
+        }
+
+    return {
+        "student_id": None,
+        "name": "Unknown",
+        "roll_number": "",
+        "confidence": 0,
+        "matched": False,
+        "status": "unknown",
+    }
+
+
+def annotate_image(image: np.ndarray, recognition_results: list[dict]) -> np.ndarray:
+    annotated_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.6
+    thickness = 2
+    text_padding_x = 8
+    text_padding_y = 8
+
+    for result in recognition_results:
+        top, right, bottom, left = result["bbox"]
+        is_matched = bool(result.get("matched"))
+        color = (0, 180, 0) if is_matched else (0, 0, 255)
+        label = (
+            f'{result["name"]} {result["confidence"]:.1f}%'
+            if is_matched
+            else "Unknown"
+        )
+
+        cv2.rectangle(annotated_image, (left, top), (right, bottom), color, 2)
+
+        (text_width, text_height), baseline = cv2.getTextSize(
+            label,
+            font,
+            font_scale,
+            thickness,
+        )
+
+        label_left = left
+        label_top = max(0, top - text_height - (text_padding_y * 2) - baseline)
+        label_right = left + text_width + (text_padding_x * 2)
+        label_bottom = top
+
+        cv2.rectangle(
+            annotated_image,
+            (label_left, label_top),
+            (label_right, label_bottom),
+            color,
+            cv2.FILLED,
+        )
+        cv2.putText(
+            annotated_image,
+            label,
+            (label_left + text_padding_x, label_bottom - text_padding_y),
+            font,
+            font_scale,
+            (255, 255, 255),
+            thickness,
+            cv2.LINE_AA,
+        )
+
+    return annotated_image
+
 def detect_faces_and_match(
     group_photo_path: str,
     known_students: list[dict],
@@ -78,59 +182,16 @@ def detect_faces_and_match(
     recognition_results: list[dict] = []
 
     for face_encoding, (top, right, bottom, left) in zip(face_encodings, face_locations):
-
-        matched_student = None
-        name = "Unknown"
-
-        if known_encodings:
-            matches = face_recognition.compare_faces(
-                known_encodings,
-                face_encoding,
-                tolerance=MATCH_TOLERANCE
-            )
-
-            distances = face_recognition.face_distance(
-                known_encodings,
-                face_encoding
-            )
-
-            if len(distances) > 0:
-                best_idx = int(np.argmin(distances))
-
-                if matches[best_idx]:
-                    matched_student = known_students[best_idx]
-                    name = matched_student.get("name", "Unknown")
+        match_result = _build_match_result(face_encoding, known_encodings, known_students)
 
         recognition_results.append({
-            "student_id": str(matched_student.get("_id")) if matched_student else None,
-            "name": name,
-            "status": "present" if matched_student else "unknown",
+            **match_result,
             "bbox": [int(top), int(right), int(bottom), int(left)],
         })
 
     # ---------------- DRAW BOXES ---------------- #
 
-    annotated_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-    for result in recognition_results:
-        top, right, bottom, left = result["bbox"]
-        is_known = result["status"] == "present"
-
-        color = (34, 197, 94) if is_known else (239, 68, 68)
-
-        cv2.rectangle(annotated_image, (left, top), (right, bottom), color, 2)
-        cv2.rectangle(annotated_image, (left, bottom - 24), (right, bottom), color, cv2.FILLED)
-
-        cv2.putText(
-            annotated_image,
-            result["name"],
-            (left + 6, bottom - 6),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
+    annotated_image = annotate_image(image, recognition_results)
 
     # ---------------- SAVE IMAGE ---------------- #
 

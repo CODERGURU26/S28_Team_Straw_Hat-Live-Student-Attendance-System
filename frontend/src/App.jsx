@@ -11,6 +11,7 @@ import Students from './pages/Students'
 import TakeAttendance from './pages/TakeAttendance'
 import Results from './pages/Results'
 import TeacherSchedule from './pages/TeacherSchedule'
+import Reports from './pages/Reports'
 
 export default function App() {
   const location = useLocation()
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/students" element={<Students />} />
             <Route path="/take-attendance" element={<TakeAttendance />} />
             <Route path="/results/:sessionId" element={<Results />} />
+            <Route path="/reports" element={<Reports />} />
           </Routes>
         </main>
       )}

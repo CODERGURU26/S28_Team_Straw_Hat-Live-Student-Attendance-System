@@ -20,7 +20,7 @@ import {
   updateSession,
 } from "../api";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "") + "/api";
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "");
 
 const WEEKDAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TYPES = ["Lecture", "Lab"];
@@ -224,10 +224,10 @@ export default function TeacherSchedule() {
       if (isStudentView && auth.studentId) {
         requests.push(
           fetchJson(
-            `/attendance/student/${auth.studentId}/month?month=${month}`,
+            `/api/attendance/student/${auth.studentId}/month?month=${month}`,
           ),
         );
-        requests.push(fetchJson("/sessions/upcoming?limit=5"));
+        requests.push(fetchJson("/api/sessions/upcoming?limit=5"));
       }
 
       const [sessionsRes, studentStatuses = [], upcoming = []] =

@@ -14,6 +14,9 @@ export const validateStudentPhoto = (formData) =>
   api.post("/api/students/validate", formData);
 export const getStudents = () => api.get("/api/students");
 export const deleteStudent = (id) => api.delete(`/api/students/${id}`);
+export const updateStudentPartial = (id, data) => api.patch(`/api/students/${id}`, data);
+export const bulkUpdateParentEmails = (rows) =>
+  api.post("/api/students/bulk-update-parent-emails", rows);
 export const addStudentPhotos = (studentId, formData) =>
   api.post(`/api/students/${studentId}/add-photos`, formData);
 export const getStudentAttendanceStats = () =>
@@ -49,9 +52,20 @@ export const exportSessionCsvUrl = (sessionId) =>
   `${api.defaults.baseURL}/api/attendance/export/${sessionId}`;
 export const updateAttendanceStatus = (sessionId, data) =>
   api.post(`/api/attendance/session/${sessionId}/update-student`, data);
+export const updateSessionNotes = (sessionId, data) =>
+  api.post(`/api/attendance/session/${sessionId}/notes`, data);
 
 export const studentLogin = (email) => api.post("/api/students/login", { email });
 export const getStudentAttendance = (studentId) =>
   api.get(`/api/students/${studentId}/attendance`);
+
+// Email APIs
+export const getEmailSettings = () => api.get("/api/email/settings");
+export const saveEmailSettings = (data) => api.post("/api/email/settings", data);
+export const sendDailyEmails = (date) => api.post("/api/email/send-daily", date ? { date } : {});
+export const sendTestEmail = (email, name) => api.post("/api/email/send-test", { email, name });
+export const getEmailLogs = () => api.get("/api/email/logs");
+export const getDailyEmailStatus = (date) =>
+  api.get("/api/email/daily-status", { params: date ? { date } : {} });
 
 export default api;

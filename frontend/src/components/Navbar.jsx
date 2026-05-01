@@ -1,5 +1,5 @@
 import { Link, NavLink, useNavigate, Navigate } from 'react-router-dom'
-import { LayoutDashboard, Users, Camera, LogOut, Calendar, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, Users, Camera, LogOut, Calendar, BarChart3, Mail } from 'lucide-react'
 
 const navItems = [
   { to: '/teacher-dashboard', label: 'Teacher Dashboard', icon: LayoutDashboard },
@@ -8,6 +8,7 @@ const navItems = [
   { to: '/take-attendance', label: 'Take Attendance', icon: Camera },
   { to: '/analytics/monthly', label: 'Monthly Analytics', icon: BarChart3 },
   { to: '/reports', label: 'Reports', icon: Calendar },
+  { to: '/email-settings', label: 'Email Settings', icon: Mail },
 ]
 
 export default function Navbar() {

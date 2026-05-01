@@ -18,6 +18,8 @@ attendance_col = _db["attendance_records"]
 teachers_col = _db["teachers"]
 sessions_col = _db["sessions"]
 schedules_col = _db["schedules"]
+email_logs_col = _db["email_logs"]
+settings_col = _db["settings"]
 
 DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -36,6 +38,7 @@ def _serialize_student(student: dict) -> dict:
         "registration_photos": student.get("registration_photos", [photo_path] if photo_path else []),
         "photo_count": int(student.get("photo_count", 1)),
         "registered_at": student.get("registered_at"),
+        "parent_email": student.get("parent_email", ""),
     }
 
 
@@ -48,6 +51,7 @@ def create_student(
     registration_photos: list[str],
     photo_count: int,
     student_id: ObjectId | None = None,
+    parent_email: str = "",
 ) -> str:
     existing = students_col.find_one({"roll_number": roll_number})
     if existing:
@@ -62,6 +66,7 @@ def create_student(
         "registration_photos": registration_photos,
         "photo_count": photo_count,
         "registered_at": datetime.now(timezone.utc),
+        "parent_email": parent_email or "",
     }
 
     if student_id is not None:
@@ -69,6 +74,38 @@ def create_student(
 
     result = students_col.insert_one(payload)
     return str(result.inserted_id)
+
+
+def update_student_partial(student_id: str, fields: dict) -> bool:
+    """Update arbitrary fields on a student document using $set (no overwrite)."""
+    if not fields:
+        return False
+    result = students_col.update_one(
+        {"_id": ObjectId(student_id)},
+        {"$set": fields},
+    )
+    return result.matched_count > 0
+
+
+def bulk_update_parent_emails(rows: list[dict]) -> dict:
+    """rows: [{roll_number, parent_email}]. Returns {updated, skipped}."""
+    updated = 0
+    skipped = 0
+    for row in rows:
+        rn = str(row.get("roll_number", "")).strip()
+        pe = str(row.get("parent_email", "")).strip()
+        if not rn or not pe:
+            skipped += 1
+            continue
+        result = students_col.update_one(
+            {"roll_number": rn},
+            {"$set": {"parent_email": pe}},
+        )
+        if result.matched_count > 0:
+            updated += 1
+        else:
+            skipped += 1
+    return {"updated": updated, "skipped": skipped}
 
 
 def get_students(include_encodings: bool = False) -> list[dict]:
@@ -120,6 +157,124 @@ def update_student_photos(
 def delete_student(student_id: str) -> bool:
     result = students_col.delete_one({"_id": ObjectId(student_id)})
     return result.deleted_count > 0
+
+
+# ---------------- EMAIL SETTINGS & LOGS ---------------- #
+
+def get_email_settings() -> dict:
+    """Return the email settings document, creating defaults if absent."""
+    doc = settings_col.find_one({"_type": "email_settings"})
+    if not doc:
+        return {
+            "daily_enabled": True,
+            "weekly_enabled": True,
+            "weekly_send_day": 6,   # Sunday
+            "weekly_send_hour": 20,
+            "weekly_send_minute": 0,
+        }
+    doc.pop("_id", None)
+    doc.pop("_type", None)
+    return doc
+
+
+def save_email_settings(data: dict) -> None:
+    """Upsert the email settings document."""
+    payload = {
+        "daily_enabled": bool(data.get("daily_enabled", True)),
+        "weekly_enabled": bool(data.get("weekly_enabled", True)),
+        "weekly_send_day": int(data.get("weekly_send_day", 6)),
+        "weekly_send_hour": int(data.get("weekly_send_hour", 20)),
+        "weekly_send_minute": int(data.get("weekly_send_minute", 0)),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    settings_col.update_one(
+        {"_type": "email_settings"},
+        {"$set": payload, "$setOnInsert": {"_type": "email_settings"}},
+        upsert=True,
+    )
+
+
+def log_email(recipient: str, email_type: str, status: str, error: str = "", local_date: str = "") -> None:
+    """Insert one row into email_logs."""
+    email_logs_col.insert_one({
+        "recipient": recipient,
+        "type": email_type,
+        "timestamp": datetime.now(timezone.utc),
+        "local_date": local_date or "",   # local (IST) date string, e.g. "2026-05-02"
+        "status": status,
+        "error": error or "",
+    })
+
+
+def get_email_logs(limit: int = 100) -> list[dict]:
+    logs = list(email_logs_col.find({}).sort("timestamp", -1).limit(limit))
+    for log in logs:
+        log["id"] = str(log.pop("_id"))
+        if isinstance(log.get("timestamp"), datetime):
+            log["timestamp"] = log["timestamp"].isoformat()
+    return logs
+
+
+def get_daily_email_status(date_str: str) -> dict | None:
+    """Return the most recent daily email log entry for a given local date, or None."""
+    start = datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    doc = email_logs_col.find_one(
+        {"type": "daily", "status": "sent",
+         "$or": [
+             {"local_date": date_str},
+             {"timestamp": {"$gte": start, "$lt": end}},
+         ]},
+        sort=[("timestamp", -1)],
+    )
+    if not doc:
+        return None
+    return {
+        "sent": True,
+        "timestamp": doc["timestamp"].isoformat() if isinstance(doc["timestamp"], datetime) else doc["timestamp"],
+    }
+
+
+# ---------------- DATE-RANGE SESSION QUERIES ---------------- #
+
+def get_sessions_for_date(date_str: str) -> list[dict]:
+    """Return attendance records for a given local date.
+    Checks session_date (local, sent from frontend) first, then date (UTC) as fallback.
+    """
+    return list(attendance_col.find({
+        "$or": [{"session_date": date_str}, {"date": date_str}]
+    }))
+
+
+def get_scheduled_sessions_for_date(date_str: str) -> list[dict]:
+    """Return session definition occurrences that fall on date_str."""
+    target = _parse_date_only(date_str)
+    if target is None:
+        return []
+    return _iter_session_occurrences_all(target, target)
+
+
+def _iter_session_occurrences_all(range_start: date, range_end: date) -> list[dict]:
+    """Return all session occurrences across all definitions in [range_start, range_end]."""
+    occurrences: list[dict] = []
+    for session in get_session_definitions():
+        occurrences.extend(_iter_session_occurrences(session, range_start, range_end))
+    return occurrences
+
+
+def get_sessions_for_week(start_date_str: str, end_date_str: str) -> list[dict]:
+    """Return attendance records in a local-date range (inclusive).
+    Checks session_date (local) first, then date (UTC) as fallback.
+    """
+    records = list(attendance_col.find({
+        "$or": [
+            {"session_date": {"$gte": start_date_str, "$lte": end_date_str}},
+            {"date": {"$gte": start_date_str, "$lte": end_date_str}},
+        ]
+    }).sort("session_date", 1))
+    for r in records:
+        r["id"] = str(r.pop("_id"))
+    return records
 
 
 # ---------------- TEACHERS ---------------- #
@@ -209,6 +364,7 @@ def get_student_attendance(student_id: str) -> list[dict]:
             "status": status,
             "total_present": len(present_ids),
             "total_absent": len(absent_ids),
+            "notes": session.get("notes", ""),
         })
 
     return result
@@ -244,6 +400,17 @@ def update_session_student_status(session_id: str, student_id: str, new_status: 
         {"$set": {"results": new_results, "absent_students": new_absent}}
     )
     return result.modified_count > 0
+
+def update_session_notes(session_id: str, notes: str) -> bool:
+    session = get_session_by_session_id(session_id)
+    if not session:
+        return False
+
+    result = attendance_col.update_one(
+        {"_id": ObjectId(session["id"])},
+        {"$set": {"notes": notes}}
+    )
+    return True
 
 
 # ---------------- SCHEDULES ---------------- #
@@ -490,9 +657,11 @@ def get_session_month(month_value: str) -> list[dict]:
         if match:
             occ["attendance_taken"] = True
             occ["attendance_session_id"] = str(match.get("session_id", match.get("_id")))
+            occ["notes"] = match.get("notes", "")
         else:
             occ["attendance_taken"] = False
             occ["attendance_session_id"] = None
+            occ["notes"] = ""
 
     return occurrences
 

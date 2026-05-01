@@ -12,8 +12,8 @@ function formatLocalDate(date) {
 
 export default function TakeAttendance() {
   const navigate = useNavigate()
-  const [photo, setPhoto] = useState(null)
-  const [preview, setPreview] = useState('')
+  const [photos, setPhotos] = useState([])
+  const [previews, setPreviews] = useState([])
   const [loading, setLoading] = useState(false)
   const [todaySessions, setTodaySessions] = useState([])
   const [allTodaySessions, setAllTodaySessions] = useState([])
@@ -37,10 +37,10 @@ export default function TakeAttendance() {
   }
 
   const submit = async () => {
-    if (!photo) return toast.error('Please select a group photo')
+    if (photos.length === 0) return toast.error('Please select at least one group photo')
 
     const formData = new FormData()
-    formData.append('group_photo', photo)
+    photos.forEach((f) => formData.append('group_photos[]', f))
     formData.append('session_date', today)
     if (scheduleId) {
       formData.append('session_id', scheduleId)
@@ -90,17 +90,24 @@ export default function TakeAttendance() {
         View Monthly Analytics →
       </Link>
 
-      <label className="block border-2 border-dashed border-slate-300 rounded-xl p-6 bg-white cursor-pointer">
-        <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) {
-            setPhoto(file)
-            setPreview(URL.createObjectURL(file))
+      <label className="block border-2 border-dashed border-slate-300 rounded-xl p-6 bg-white cursor-pointer text-center hover:bg-slate-50 transition-colors">
+        <input type="file" multiple className="hidden" accept="image/*" onChange={(e) => {
+          const files = Array.from(e.target.files || [])
+          if (files.length > 0) {
+            setPhotos(files)
+            setPreviews(files.map((f) => URL.createObjectURL(f)))
           }
         }} />
-        <p>Drag & drop or click to upload group photo</p>
+        <p className="font-medium text-slate-700">Drag & drop or click to upload</p>
+        <p className="text-sm text-slate-500 mt-1">You can select multiple photos for large classrooms</p>
       </label>
-      {preview && <img src={preview} alt="group preview" className="rounded-lg" />}
+      {previews.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {previews.map((src, idx) => (
+            <img key={idx} src={src} alt="group preview" className="rounded-lg object-cover aspect-video w-full border shadow-sm" />
+          ))}
+        </div>
+      )}
       <button onClick={submit} disabled={loading} className="px-4 py-2 rounded-lg bg-green-500 text-white disabled:opacity-60">
         {loading ? 'Processing...' : 'Process Attendance'}
       </button>

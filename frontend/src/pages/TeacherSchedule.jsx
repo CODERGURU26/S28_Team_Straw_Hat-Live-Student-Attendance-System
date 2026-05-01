@@ -719,6 +719,12 @@ export default function TeacherSchedule({ roleOverride }) {
                                   </span>
                                 )}
                               </p>
+                              {session.notes && (
+                                <div className="mt-2 text-xs text-slate-700 bg-slate-50 p-2 rounded border border-slate-200">
+                                  <span className="font-semibold text-slate-900 block mb-0.5">Session Note:</span>
+                                  {session.notes}
+                                </div>
+                              )}
                             </button>
 
                             {!isStudentView && (

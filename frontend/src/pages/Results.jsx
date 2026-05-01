@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Info, TriangleAlert } from "lucide-react";
+import { Info, TriangleAlert, Mail, CheckCircle2 } from "lucide-react";
 import AttendanceBadge from "../components/AttendanceBadge";
 import {
   exportSessionCsvUrl,
   getSession,
   getSchedules,
   updateAttendanceStatus,
+  updateSessionNotes,
+  getDailyEmailStatus,
+  sendDailyEmails,
 } from "../api";
 
 const getNumericConfidence = (confidence) =>
@@ -42,6 +45,10 @@ export default function Results() {
   const [session, setSession] = useState(null);
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notes, setNotes] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(null); // {sent, timestamp} or null
+  const [sendingEmails, setSendingEmails] = useState(false);
 
   const loadData = async () => {
     try {
@@ -51,6 +58,19 @@ export default function Results() {
       ]);
       setSession(sessionRes.data);
       setSchedules(scheduleRes.data);
+      setNotes(sessionRes.data.notes || "");
+
+      // Load daily email status for this session's date
+      // Prefer session_date (local IST date) over date (UTC server date)
+      const sessionDate = sessionRes.data.session_date || sessionRes.data.date;
+      if (sessionDate) {
+        try {
+          const statusRes = await getDailyEmailStatus(sessionDate);
+          setEmailStatus(statusRes.data?.sent ? statusRes.data : null);
+        } catch {
+          // ignore
+        }
+      }
     } catch {
       toast.error("Could not load session");
     } finally {
@@ -99,6 +119,18 @@ export default function Results() {
       loadData();
     } catch (err) {
       toast.error("Failed to update status");
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    try {
+      setSavingNotes(true);
+      await updateSessionNotes(sessionId, { notes });
+      toast.success("Session notes saved");
+    } catch (err) {
+      toast.error("Failed to save notes");
+    } finally {
+      setSavingNotes(false);
     }
   };
 
@@ -153,12 +185,41 @@ export default function Results() {
           </p>
         </div>
       </div>
-      <div className="grid lg:grid-cols-2 gap-4">
-        <img
-          src={session.annotated_image_url}
-          alt="annotated"
-          className="rounded-lg border bg-white"
+      
+      <div className="bg-white p-4 rounded-lg border">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">Session Notes (Visible to Students)</label>
+        <textarea
+          className="w-full border rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500"
+          rows={2}
+          placeholder="e.g. Covered Chapter 5..."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
         />
+        <div className="flex justify-end mt-2">
+          <button
+            onClick={handleSaveNotes}
+            disabled={savingNotes}
+            className="px-4 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {savingNotes ? "Saving..." : "Save Notes"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="space-y-4 flex flex-col">
+          {(session.annotated_image_urls && session.annotated_image_urls.length > 0
+            ? session.annotated_image_urls
+            : [session.annotated_image_url]
+          ).filter(Boolean).map((url, idx) => (
+            <img
+              key={idx}
+              src={url}
+              alt={`annotated group ${idx + 1}`}
+              className="rounded-lg border bg-white w-full"
+            />
+          ))}
+        </div>
         <div className="space-y-4">
           {lowConfidenceResults.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -259,7 +320,7 @@ export default function Results() {
         </div>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <a
           href={exportSessionCsvUrl(sessionId)}
           className="px-4 py-2 rounded-lg bg-slate-900 text-white"
@@ -272,7 +333,46 @@ export default function Results() {
         >
           Take New Attendance
         </Link>
+        <button
+          onClick={async () => {
+            try {
+              setSendingEmails(true);
+              const date = session?.session_date || session?.date;
+              const res = await sendDailyEmails(date);
+              toast.success(`Daily emails sent to ${res.data.sent} student(s)`);
+              // Refresh email status
+              if (date) {
+                const statusRes = await getDailyEmailStatus(date);
+                setEmailStatus(statusRes.data?.sent ? statusRes.data : null);
+              }
+            } catch (err) {
+              toast.error(err.response?.data?.message || 'Failed to send emails');
+            } finally {
+              setSendingEmails(false);
+            }
+          }}
+          disabled={sendingEmails}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+        >
+          <Mail size={16} />
+          {sendingEmails ? 'Sending…' : 'Send Daily Summary Emails'}
+        </button>
       </div>
+
+      {/* Daily email status indicator */}
+      {emailStatus?.sent && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 w-fit">
+          <CheckCircle2 size={16} className="flex-shrink-0" />
+          <span>
+            Daily summary emails sent ✓
+            {emailStatus.timestamp && (
+              <span className="ml-2 text-green-500 text-xs">
+                {new Date(emailStatus.timestamp).toLocaleString()}
+              </span>
+            )}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

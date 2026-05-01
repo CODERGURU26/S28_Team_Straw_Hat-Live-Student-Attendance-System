@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LogOut,
@@ -649,39 +649,45 @@ export default function StudentDashboard() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {attendance.records.map((record, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-slate-50 transition-colors"
-                        >
-                          <td className="px-6 py-4 text-slate-800">
-                            {new Date(record.timestamp).toLocaleString(
-                              "en-US",
-                              {
-                                weekday: "short",
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium text-xs ${
-                                record.status === "present"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-rose-50 text-rose-700"
-                              }`}
-                            >
-                              {record.status === "present"
-                                ? "Present"
-                                : "Absent"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-slate-500 hidden sm:table-cell">
-                            {record.total_present} Students
-                          </td>
-                        </tr>
+                        <React.Fragment key={idx}>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-6 py-4 text-slate-800">
+                              {new Date(record.timestamp).toLocaleString(
+                                "en-US",
+                                {
+                                  weekday: "short",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium text-xs ${
+                                  record.status === "present"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-rose-50 text-rose-700"
+                                }`}
+                              >
+                                {record.status === "present"
+                                  ? "Present"
+                                  : "Absent"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-slate-500 hidden sm:table-cell">
+                              {record.total_present} Students
+                            </td>
+                          </tr>
+                          {record.notes && (
+                            <tr className="bg-slate-50/30 border-b border-slate-100">
+                              <td colSpan={3} className="px-6 pb-4 pt-1 text-sm text-slate-600">
+                                <span className="font-semibold text-slate-700">Teacher Note:</span> {record.notes}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -692,6 +698,28 @@ export default function StudentDashboard() {
 
           {activeTab === "profile" && (
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              {/* Account info — email read-only, parent email NOT shown to students */}
+              <div className="mb-6 pb-6 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-800 mb-3">
+                  Account Information
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="bg-indigo-100 text-indigo-600 p-2 rounded-md">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Email Address</p>
+                      <p className="text-sm font-medium text-slate-800 truncate">{student.email}</p>
+                    </div>
+                    <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Read only</span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Your email was set when you registered. To change it, contact your administrator.
+                  </p>
+                </div>
+              </div>
+
               <div className="mb-6">
                 <h3 className="text-lg font-bold text-slate-800 mb-1">
                   Face Database

@@ -13,6 +13,7 @@ import Results from './pages/Results'
 import TeacherSchedule from './pages/TeacherSchedule'
 import Reports from './pages/Reports'
 import MonthlyAnalytics from './pages/MonthlyAnalytics'
+import EmailSettings from './pages/EmailSettings'
 
 export default function App() {
   const location = useLocation()
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/results/:sessionId" element={<Results />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/analytics/monthly" element={<MonthlyAnalytics />} />
+            <Route path="/email-settings" element={<EmailSettings />} />
           </Routes>
         </main>
       )}

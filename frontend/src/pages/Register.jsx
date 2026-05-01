@@ -11,6 +11,7 @@ export default function Register() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [rollNumber, setRollNumber] = useState('')
+  const [parentEmail, setParentEmail] = useState('')
   const [slots, setSlots] = useState(Array.from({ length: MAX_PHOTOS }, () => ({ file: null, preview: '', status: 'idle', error: '' })))
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -20,9 +21,7 @@ export default function Register() {
   const validatePhoto = async (file, index) => {
     const formData = new FormData()
     formData.append('photo', file)
-
     setSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, status: 'validating', error: '' } : slot)))
-
     try {
       await validateStudentPhoto(formData)
       setSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, status: 'valid' } : slot)))
@@ -58,6 +57,9 @@ export default function Register() {
     formData.append('name', name)
     formData.append('email', email)
     formData.append('roll_number', rollNumber)
+    if (parentEmail.trim()) {
+      formData.append('parent_email', parentEmail.trim())
+    }
     files.forEach((file) => formData.append('photos[]', file))
 
     try {
@@ -67,7 +69,6 @@ export default function Register() {
       const res = await registerStudent(formData)
       clearInterval(timer)
       setProgress(100)
-      // Save student info to localStorage for the dashboard
       const studentData = {
         id: res?.data?.student_id,
         name,
@@ -95,6 +96,19 @@ export default function Register() {
       <input className="w-full p-3 rounded-lg border" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
       <input type="email" className="w-full p-3 rounded-lg border" placeholder="Email (@slrtce.in)" value={email} onChange={(e) => setEmail(e.target.value)} required pattern=".*@slrtce\.in$" title="Please use your @slrtce.in email address" />
       <input className="w-full p-3 rounded-lg border" placeholder="Roll Number" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} required />
+
+      <div>
+        <input
+          type="email"
+          className="w-full p-3 rounded-lg border"
+          placeholder="Parent / Guardian Email (optional)"
+          value={parentEmail}
+          onChange={(e) => setParentEmail(e.target.value)}
+        />
+        <p className="text-xs text-slate-400 mt-1">
+          If provided, the parent will be CC'd on daily and weekly attendance emails.
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {slots.map((slot, index) => (

@@ -1,6 +1,8 @@
 import csv
 import io
+import logging
 import os
+import threading
 import uuid
 from datetime import datetime, timezone
 
@@ -25,6 +27,8 @@ from database import (
     get_students,
     get_teacher_by_email,
     update_student_photos,
+    update_student_partial,
+    bulk_update_parent_emails,
     create_schedule,
     get_schedules,
     update_schedule,
@@ -42,8 +46,16 @@ from database import (
     get_weekly_leaderboard,
     get_absence_streak,
     update_session_student_status,
+    get_email_settings,
+    save_email_settings,
+    get_email_logs,
+    get_daily_email_status,
 )
 from face_utils import average_encodings, detect_faces_and_match, encode_face
+import email_service
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -56,11 +68,38 @@ for folder in [UPLOAD_FOLDER, STUDENT_PHOTO_FOLDER]:
 
 app = Flask(__name__, static_url_path="/static", static_folder="static")
 
-CORS(app, 
+CORS(app,
      resources={r"/*": {"origins": "*"}},
      allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
      supports_credentials=True)
+
+# ── APScheduler: weekly email job ──────────────────────────────
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    def _weekly_email_job():
+        logger.info("APScheduler: running weekly email job")
+        try:
+            email_service.send_weekly_summary()
+        except Exception as exc:
+            logger.error("Weekly email job failed: %s", exc)
+
+    _scheduler = BackgroundScheduler(daemon=True)
+    settings_now = get_email_settings()
+    _scheduler.add_job(
+        _weekly_email_job,
+        trigger="cron",
+        day_of_week="sun",
+        hour=settings_now.get("weekly_send_hour", 20),
+        minute=settings_now.get("weekly_send_minute", 0),
+        id="weekly_email",
+    )
+    _scheduler.start()
+    logger.info("APScheduler started — weekly email job scheduled")
+except Exception as _sched_err:
+    logger.warning("Could not start APScheduler: %s", _sched_err)
+    _scheduler = None
 
 @app.before_request
 def handle_options():
@@ -257,6 +296,7 @@ def register_student():
     name = request.form.get("name", "").strip()
     email = request.form.get("email", "").strip()
     roll_number = request.form.get("roll_number", "").strip()
+    parent_email = request.form.get("parent_email", "").strip()
     photos = _collect_photos_from_request()
 
     if not name or not roll_number or not email:
@@ -285,6 +325,7 @@ def register_student():
             registration_photos=photo_paths,
             photo_count=len(photo_paths),
             student_id=student_oid,
+            parent_email=parent_email,
         )
 
         return jsonify(
@@ -435,20 +476,70 @@ def remove_student(student_id):
     return jsonify({"success": True, "message": "Student deleted"})
 
 
+@app.route("/api/students/<student_id>", methods=["PATCH"])
+def patch_student(student_id):
+    """Partial update — accepts {parent_email} without overwriting other fields."""
+    data = request.json or {}
+    allowed_fields = {"parent_email"}
+    fields = {k: v for k, v in data.items() if k in allowed_fields}
+    if not fields:
+        return jsonify({"success": False, "message": "No updatable fields provided"}), 400
+    try:
+        matched = update_student_partial(student_id, fields)
+        if not matched:
+            return jsonify({"success": False, "message": "Student not found"}), 404
+        return jsonify({"success": True}), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/api/students/bulk-update-parent-emails", methods=["POST"])
+def bulk_parent_email_update():
+    rows = request.json
+    if not isinstance(rows, list):
+        return jsonify({"success": False, "message": "Expected a JSON array"}), 400
+    try:
+        result = bulk_update_parent_emails(rows)
+        return jsonify({"success": True, **result}), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
 @app.route("/api/attendance/take", methods=["POST"])
 def take_attendance():
-    group_photo = request.files.get("group_photo")
-    if not group_photo:
-        return jsonify({"success": False, "message": "group_photo is required"}), 400
-
-    group_name = secure_filename(f"group_{uuid.uuid4().hex}_{group_photo.filename}")
-    group_abs_path = os.path.join(UPLOAD_FOLDER, group_name)
-    group_photo.save(group_abs_path)
+    group_photos = request.files.getlist("group_photos[]")
+    if not group_photos:
+        group_photo = request.files.get("group_photo")
+        if group_photo:
+            group_photos = [group_photo]
+        else:
+            return jsonify({"success": False, "message": "group_photos[] or group_photo is required"}), 400
 
     known_students = get_students(include_encodings=True)
-    recognition_results, annotated_path = detect_faces_and_match(group_abs_path, known_students, UPLOAD_FOLDER)
+    all_recognition_results = []
+    annotated_paths = []
 
-    present_ids = {str(r["student_id"]) for r in recognition_results if r["student_id"] is not None}
+    for photo in group_photos:
+        group_name = secure_filename(f"group_{uuid.uuid4().hex}_{photo.filename}")
+        group_abs_path = os.path.join(UPLOAD_FOLDER, group_name)
+        photo.save(group_abs_path)
+
+        recognition_results, annotated_path = detect_faces_and_match(group_abs_path, known_students, UPLOAD_FOLDER)
+        all_recognition_results.extend(recognition_results)
+        annotated_paths.append(f"uploads/{os.path.basename(annotated_path)}")
+
+    merged_results_dict = {}
+    unknown_results = []
+    for r in all_recognition_results:
+        if r.get("status") == "unknown":
+            unknown_results.append(r)
+        else:
+            sid = str(r["student_id"])
+            if sid not in merged_results_dict or r["confidence"] > merged_results_dict[sid]["confidence"]:
+                merged_results_dict[sid] = r
+
+    final_recognition_results = list(merged_results_dict.values()) + unknown_results
+    present_ids = {str(r["student_id"]) for r in final_recognition_results if r.get("student_id") is not None}
 
     present_students = [
         {"student_id": sid, "name": s["name"], "roll_number": s["roll_number"]}
@@ -478,8 +569,9 @@ def take_attendance():
         "session_id": session_id,
         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "timestamp": datetime.now(timezone.utc),
-        "annotated_image_path": f"uploads/{os.path.basename(annotated_path)}",
-        "results": recognition_results,
+        "annotated_image_paths": annotated_paths,
+        "annotated_image_path": annotated_paths[0] if annotated_paths else "",
+        "results": final_recognition_results,
         "absent_students": absent_students,
     }
     if schedule_id:
@@ -494,12 +586,28 @@ def take_attendance():
         
     create_attendance_record(record)
 
+    # ── Auto-trigger: send daily emails when all sessions are done ──
+    def _maybe_trigger_daily_email(local_date_str: str):
+        try:
+            from database import get_sessions_for_date, get_scheduled_sessions_for_date
+            taken = get_sessions_for_date(local_date_str)
+            scheduled = get_scheduled_sessions_for_date(local_date_str)
+            if scheduled and len(taken) >= len(scheduled):
+                logger.info("All %d sessions done for %s — triggering daily email", len(scheduled), local_date_str)
+                email_service.send_daily_summary_for_date(local_date_str)
+        except Exception as exc:
+            logger.error("Auto daily email trigger failed: %s", exc)
+
+    # Prefer session_date (local date from frontend) over date (UTC server date)
+    local_date_str = record.get("session_date") or record.get("date", datetime.now(timezone.utc).date().isoformat())
+    threading.Thread(target=_maybe_trigger_daily_email, args=(local_date_str,), daemon=True).start()
+
     return jsonify(
         {
             "session_id": session_id,
             "present": present_students,
             "absent": absent_students,
-            "unknown_count": sum(1 for r in recognition_results if r["status"] == "unknown"),
+            "unknown_count": len(unknown_results),
             "results": [
                 {
                     "student_id": result.get("student_id"),
@@ -508,9 +616,10 @@ def take_attendance():
                     "confidence": result.get("confidence"),
                     "bbox": result.get("bbox", []),
                 }
-                for result in recognition_results
+                for result in final_recognition_results
             ],
-            "annotated_image_url": full_url(f"/static/{record['annotated_image_path']}"),
+            "annotated_image_urls": [full_url(f"/static/{path}") for path in annotated_paths],
+            "annotated_image_url": full_url(f"/static/{annotated_paths[0]}") if annotated_paths else "",
         }
     )
 
@@ -563,15 +672,23 @@ def attendance_session(session_id):
         if isinstance(result.get("student_id"), ObjectId):
             result["student_id"] = str(result["student_id"])
 
+    annotated_image_urls = []
+    if "annotated_image_paths" in session and session["annotated_image_paths"]:
+        annotated_image_urls = [full_url(f"/static/{path}") for path in session["annotated_image_paths"]]
+    elif "annotated_image_path" in session and session["annotated_image_path"]:
+        annotated_image_urls = [full_url(f"/static/{session['annotated_image_path']}")]
+
     return jsonify(
         {
             "session_id": session["session_id"],
             "date": session["date"],
             "timestamp": session["timestamp"],
             "schedule_id": session.get("schedule_id"),
-            "annotated_image_url": full_url(f"/static/{session['annotated_image_path']}"),
+            "annotated_image_urls": annotated_image_urls,
+            "annotated_image_url": annotated_image_urls[0] if annotated_image_urls else "",
             "results": session.get("results", []),
             "absent_students": session.get("absent_students", []),
+            "notes": session.get("notes", ""),
         }
     )
 
@@ -596,6 +713,23 @@ def update_student_status(session_id):
             return jsonify({"success": False, "message": "Session not found or update failed"}), 404
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/attendance/session/<session_id>/notes", methods=["POST"])
+def update_session_notes_route(session_id):
+    data = request.json or {}
+    notes = data.get("notes", "")
+    
+    try:
+        from database import update_session_notes
+        updated = update_session_notes(session_id, notes)
+        if updated:
+            return jsonify({"success": True}), 200
+        else:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
 
 
 @app.route("/api/attendance/export/<session_id>", methods=["GET"])
@@ -645,6 +779,7 @@ def student_login():
     if not student:
         return jsonify({"success": False, "message": "No student found with this email"}), 404
 
+    # parent_email is intentionally excluded — students must not see or edit it
     return jsonify({
         "success": True,
         "student": {
@@ -1122,6 +1257,75 @@ def escalation_alerts():
         return jsonify(alerts), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+# ── Email API routes ───────────────────────────────────────────────────────────
+
+@app.route("/api/email/settings", methods=["GET"])
+def get_email_settings_route():
+    try:
+        return jsonify(get_email_settings()), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/api/email/settings", methods=["POST"])
+def save_email_settings_route():
+    data = request.json or {}
+    try:
+        save_email_settings(data)
+        return jsonify({"success": True}), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/api/email/send-daily", methods=["POST"])
+def send_daily_email_route():
+    """Manual trigger — send daily summary emails for today (or a given date)."""
+    data = request.json or {}
+    date_str = data.get("date") or datetime.now(timezone.utc).date().isoformat()
+    try:
+        result = email_service.send_daily_summary_for_date(date_str)
+        return jsonify({"success": True, **result}), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/api/email/send-test", methods=["POST"])
+def send_test_email_route():
+    """Send a test email to the teacher's registered address."""
+    data = request.json or {}
+    teacher_email = data.get("email", "").strip()
+    teacher_name = data.get("name", "Teacher").strip()
+    if not teacher_email:
+        return jsonify({"success": False, "message": "email is required"}), 400
+    try:
+        ok = email_service.send_test_email(teacher_email, teacher_name)
+        if ok:
+            return jsonify({"success": True, "message": "Test email sent"}), 200
+        return jsonify({"success": False, "message": "Failed to send — check email credentials in .env"}), 500
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/api/email/logs", methods=["GET"])
+def email_logs_route():
+    try:
+        return jsonify(get_email_logs()), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/api/email/daily-status", methods=["GET"])
+def daily_email_status_route():
+    date_str = request.args.get("date") or datetime.now(timezone.utc).date().isoformat()
+    try:
+        status = get_daily_email_status(date_str)
+        if status:
+            return jsonify(status), 200
+        return jsonify({"sent": False}), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 if __name__ == "__main__":

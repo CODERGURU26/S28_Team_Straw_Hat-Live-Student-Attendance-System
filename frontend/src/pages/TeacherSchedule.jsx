@@ -256,7 +256,7 @@ export default function TeacherSchedule({ roleOverride }) {
 
   useEffect(() => {
     fetchMonthView();
-  }, [month, isStudentView, studentId]);
+  }, [month, isStudentView, auth.studentId]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -467,40 +467,61 @@ export default function TeacherSchedule({ roleOverride }) {
         </div>
       </div>
 
-      {isStudentView && upcomingSessions.length > 0 && (
+      {isStudentView && (
         <section className="space-y-3">
           <div className="flex items-center gap-2 text-slate-700">
             <Calendar size={18} className="text-indigo-600" />
             <h2 className="text-lg font-semibold">Upcoming Sessions</h2>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:overflow-x-auto sm:pb-1">
-            {upcomingSessions.map((session) => (
-              <div
-                key={`${session.session_id}-${session.date}-${session.time}`}
-                className="min-w-[240px] rounded-xl border border-slate-200 border-l-4 border-l-gray-300 bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-semibold text-slate-800">
-                    {session.subject}
-                  </p>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${getTeacherTypeStyles(session.type)}`}
+          {upcomingSessions.length > 0 ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:overflow-x-auto sm:pb-1">
+              {upcomingSessions.map((session, idx) => {
+                const isNext = idx === 0;
+                return (
+                  <div
+                    key={`${session.session_id}-${session.date}-${session.time}`}
+                    className={`min-w-[240px] rounded-xl border p-4 shadow-sm ${
+                      isNext
+                        ? "border-indigo-400 border-l-4 border-l-indigo-600 bg-indigo-50/30"
+                        : "border-slate-200 border-l-4 border-l-gray-300 bg-white"
+                    }`}
                   >
-                    {session.type}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-slate-500">
-                  {formatDisplayDate(session.date)}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {formatTimeRange(session.time, session.duration_minutes)}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {session.room || "TBD"}
-                </p>
-              </div>
-            ))}
-          </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        {isNext && (
+                          <span className="inline-block mb-1.5 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md shadow-sm">
+                            Next Up
+                          </span>
+                        )}
+                        <p className={`font-semibold ${isNext ? "text-indigo-900" : "text-slate-800"}`}>
+                          {session.subject}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${getTeacherTypeStyles(session.type)}`}
+                      >
+                        {session.type}
+                      </span>
+                    </div>
+                    <p className={`mt-2 text-sm ${isNext ? "text-indigo-700" : "text-slate-500"}`}>
+                      {formatDisplayDate(session.date)}
+                    </p>
+                    <p className={`mt-1 text-sm ${isNext ? "text-indigo-800 font-medium" : "text-slate-600"}`}>
+                      {formatTimeRange(session.time, session.duration_minutes)}
+                    </p>
+                    <p className={`mt-1 text-sm ${isNext ? "text-indigo-600" : "text-slate-500"}`}>
+                      {session.room || "TBD"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500">
+              <p className="font-medium text-slate-700">No upcoming sessions</p>
+              <p className="text-sm mt-1">You are all caught up for now!</p>
+            </div>
+          )}
         </section>
       )}
 

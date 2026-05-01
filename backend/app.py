@@ -69,8 +69,16 @@ def handle_options():
         return response
 
 def full_url(path):
-    base = os.environ.get("BACKEND_URL", "https://rcn16f04-5000.inc1.devtunnels.ms")
-    return f"{base}{path}"
+    base = os.environ.get("BACKEND_URL")
+    if base:
+        return f"{base.rstrip('/')}{path}"
+    try:
+        from flask import request
+        if request and request.host_url:
+            return f"{request.host_url.rstrip('/')}{path}"
+    except RuntimeError:
+        pass
+    return f"http://localhost:5000{path}"
 
 def _absolute_photo_path(path):
     if not path:
@@ -940,6 +948,8 @@ def upcoming_sessions():
         for _ in range(12):
             for occurrence in get_session_month(month_value):
                 if occurrence.get("date") < today:
+                    continue
+                if occurrence.get("attendance_taken"):
                     continue
 
                 key = (

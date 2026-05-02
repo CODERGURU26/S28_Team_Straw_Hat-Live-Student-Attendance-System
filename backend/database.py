@@ -357,14 +357,19 @@ def get_student_attendance(student_id: str) -> list[dict]:
         else:
             continue
 
+        # Prefer session_date (local/IST) over date (UTC) for display
+        local_date = session.get("session_date") or session.get("date", "")
+
         result.append({
             "session_id": session.get("session_id", str(session.get("_id"))),
-            "date": session.get("date"),
+            "date": local_date,
+            "session_date": local_date,
             "timestamp": session.get("timestamp"),
             "status": status,
             "total_present": len(present_ids),
             "total_absent": len(absent_ids),
             "notes": session.get("notes", ""),
+            "subject": session.get("subject", ""),
         })
 
     return result
@@ -861,11 +866,72 @@ def get_absence_streak(student_id: str) -> dict:
 def get_weekly_leaderboard() -> list[dict]:
     from datetime import timedelta
 
-    now = datetime.now(timezone.utc)
-    start_of_week = now - timedelta(days=now.weekday())
-    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Use local date strings (YYYY-MM-DD) to avoid UTC/IST timezone mismatch.
+    # Week starts on Monday.
+    today_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+    monday_ist = today_ist - timedelta(days=today_ist.weekday())
+    sunday_ist = monday_ist + timedelta(days=6)
+    week_start_str = monday_ist.isoformat()
+    week_end_str = sunday_ist.isoformat()
 
-    sessions = list(attendance_col.find({"timestamp": {"$gte": start_of_week}}))
+    # Match sessions by session_date (local) or date (UTC fallback)
+    sessions = list(attendance_col.find({
+        "$or": [
+            {"session_date": {"$gte": week_start_str, "$lte": week_end_str}},
+            {"date": {"$gte": week_start_str, "$lte": week_end_str}},
+        ]
+    }))
+
+    students = list(students_col.find({}, {"name": 1}))
+
+    leaderboard = []
+
+    for s in students:
+        sid = str(s.get("_id"))
+        total = 0
+        present = 0
+
+        for sess in sessions:
+            present_ids = {str(r.get("student_id")) for r in sess.get("results", []) if r.get("status") == "present"}
+            absent_ids = {str(a.get("student_id")) for a in sess.get("absent_students", [])}
+
+            if sid in present_ids:
+                total += 1
+                present += 1
+            elif sid in absent_ids:
+                total += 1
+
+        if total > 0:
+            leaderboard.append({
+                "name": s.get("name"),
+                "percentage": round((present / total) * 100, 1),
+                "present": present,
+                "total": total
+            })
+
+    leaderboard.sort(key=lambda x: (x["percentage"], x["present"]), reverse=True)
+    return leaderboard[:5]
+
+def get_monthly_leaderboard() -> list[dict]:
+    from datetime import timedelta
+    import calendar
+
+    today_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+    month_start = today_ist.replace(day=1)
+    _, last_day = calendar.monthrange(month_start.year, month_start.month)
+    month_end = today_ist.replace(day=last_day)
+    
+    month_start_str = month_start.isoformat()
+    month_end_str = month_end.isoformat()
+
+    # Match sessions by session_date (local) or date (UTC fallback)
+    sessions = list(attendance_col.find({
+        "$or": [
+            {"session_date": {"$gte": month_start_str, "$lte": month_end_str}},
+            {"date": {"$gte": month_start_str, "$lte": month_end_str}},
+        ]
+    }))
+
     students = list(students_col.find({}, {"name": 1}))
 
     leaderboard = []

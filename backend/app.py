@@ -44,6 +44,7 @@ from database import (
     get_monthly_analytics,
     get_student_streak,
     get_weekly_leaderboard,
+    get_monthly_leaderboard,
     get_absence_streak,
     update_session_student_status,
     get_email_settings,
@@ -1175,6 +1176,10 @@ def remove_schedule(schedule_id):
 @app.route("/api/gamification/leaderboard", methods=["GET"])
 def leaderboard():
     return jsonify(get_weekly_leaderboard()), 200
+
+@app.route("/api/gamification/monthly-leaderboard", methods=["GET"])
+def monthly_leaderboard():
+    return jsonify(get_monthly_leaderboard()), 200
 
 
 @app.route("/api/students/<student_id>/gamification", methods=["GET"])

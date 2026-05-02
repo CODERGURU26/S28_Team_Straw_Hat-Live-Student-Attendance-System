@@ -41,7 +41,10 @@ export const getSessionsMonth = (month) =>
   api.get("/api/sessions/month", { params: { month } });
 export const getMonthlyAnalytics = (month) =>
   api.get("/api/analytics/monthly", { params: { month } });
-export const getLeaderboard = () => api.get("/api/gamification/leaderboard");
+export const getLeaderboard = () =>
+  api.get("/api/gamification/leaderboard");
+export const getMonthlyLeaderboard = () =>
+  api.get("/api/gamification/monthly-leaderboard");
 export const getStudentGamification = (id) =>
   api.get(`/api/students/${id}/gamification`);
 export const getEscalationAlerts = () => api.get("/api/alerts/escalation");

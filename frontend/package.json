@@ -16,7 +16,8 @@
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.26.2",
     "recharts": "^3.8.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

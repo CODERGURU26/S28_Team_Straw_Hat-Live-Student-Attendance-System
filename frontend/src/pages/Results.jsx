@@ -162,44 +162,61 @@ export default function Results() {
   };
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Attendance Results</h1>
-      <div className="flex flex-col sm:flex-row gap-4 justify-between bg-white p-4 rounded-lg border">
+    <div className="space-y-6 max-w-7xl mx-auto py-8 animate-fade-in">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
         <div>
-          <p className="text-sm font-semibold text-slate-500">Session ID</p>
-          <p className="text-sm font-mono">{session.session_id}</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Attendance Results</h1>
+          <p className="text-slate-500 mt-1 font-medium">Review and verify automatically generated attendance.</p>
         </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-500">Schedule</p>
-          <p className="text-sm">{scheduleName}</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Session ID</p>
+          <p className="text-lg font-mono font-bold text-slate-800 break-all">{session.session_id}</p>
         </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-500">Summary</p>
-          <p className="text-sm text-slate-700">
-            <span className="text-green-600 font-bold">{summary.present}</span>{" "}
-            Present |{" "}
-            <span className="text-amber-500 font-bold">{summary.unknown}</span>{" "}
-            Unknown |{" "}
-            <span className="text-red-500 font-bold">{summary.absent}</span>{" "}
-            Absent
-          </p>
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Schedule</p>
+          <p className="text-lg font-bold text-slate-800">{scheduleName}</p>
+        </div>
+        <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full filter blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+          <p className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2 relative z-10">Summary</p>
+          <div className="flex gap-4 relative z-10">
+            <div>
+              <span className="block text-2xl font-extrabold text-emerald-600 leading-none">{summary.present}</span>
+              <span className="text-xs font-bold text-emerald-700/70 uppercase">Present</span>
+            </div>
+            <div className="w-px bg-indigo-200/50"></div>
+            <div>
+              <span className="block text-2xl font-extrabold text-amber-500 leading-none">{summary.unknown}</span>
+              <span className="text-xs font-bold text-amber-600/70 uppercase">Unknown</span>
+            </div>
+            <div className="w-px bg-indigo-200/50"></div>
+            <div>
+              <span className="block text-2xl font-extrabold text-rose-500 leading-none">{summary.absent}</span>
+              <span className="text-xs font-bold text-rose-600/70 uppercase">Absent</span>
+            </div>
+          </div>
         </div>
       </div>
       
-      <div className="bg-white p-4 rounded-lg border">
-        <label className="block text-sm font-semibold text-slate-700 mb-2">Session Notes (Visible to Students)</label>
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mb-6">
+        <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+           <Info size={16} className="text-slate-400" /> Session Notes <span className="text-xs font-medium text-slate-400 normal-case">(Visible to Students)</span>
+        </label>
         <textarea
-          className="w-full border rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500"
+          className="w-full border-2 border-slate-100 rounded-xl p-4 text-sm font-medium focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50 focus:bg-white"
           rows={2}
-          placeholder="e.g. Covered Chapter 5..."
+          placeholder="e.g. Covered Chapter 5, discussion on midterms..."
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
-        <div className="flex justify-end mt-2">
+        <div className="flex justify-end mt-3">
           <button
             onClick={handleSaveNotes}
             disabled={savingNotes}
-            className="px-4 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            className="px-6 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50 transition-colors shadow-md shadow-slate-900/10 active:scale-95"
           >
             {savingNotes ? "Saving..." : "Save Notes"}
           </button>
@@ -212,12 +229,14 @@ export default function Results() {
             ? session.annotated_image_urls
             : [session.annotated_image_url]
           ).filter(Boolean).map((url, idx) => (
-            <img
-              key={idx}
-              src={url}
-              alt={`annotated group ${idx + 1}`}
-              className="rounded-lg border bg-white w-full"
-            />
+            <div key={idx} className="rounded-2xl border-4 border-white shadow-lg overflow-hidden bg-white relative group">
+              <img
+                src={url}
+                alt={`annotated group ${idx + 1}`}
+                className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-700"
+              />
+              <div className="absolute inset-0 border border-slate-100 rounded-2xl pointer-events-none"></div>
+            </div>
           ))}
         </div>
         <div className="space-y-4">
@@ -320,59 +339,57 @@ export default function Results() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <a
-          href={exportSessionCsvUrl(sessionId)}
-          className="px-4 py-2 rounded-lg bg-slate-900 text-white"
-        >
-          Export CSV
-        </a>
-        <Link
-          to="/take-attendance"
-          className="px-4 py-2 rounded-lg bg-green-500 text-white"
-        >
-          Take New Attendance
-        </Link>
-        <button
-          onClick={async () => {
-            try {
-              setSendingEmails(true);
-              const date = session?.session_date || session?.date;
-              const res = await sendDailyEmails(date);
-              toast.success(`Daily emails sent to ${res.data.sent} student(s)`);
-              // Refresh email status
-              if (date) {
-                const statusRes = await getDailyEmailStatus(date);
-                setEmailStatus(statusRes.data?.sent ? statusRes.data : null);
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-slate-200">
+        <div className="flex flex-wrap gap-3">
+          <a
+            href={exportSessionCsvUrl(sessionId)}
+            className="px-5 py-2.5 rounded-xl border-2 border-slate-200 bg-white text-slate-700 font-bold hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          >
+            Export CSV
+          </a>
+          <button
+            onClick={async () => {
+              try {
+                setSendingEmails(true);
+                const date = session?.session_date || session?.date;
+                const res = await sendDailyEmails(date);
+                toast.success(`Daily emails sent to ${res.data.sent} student(s)`);
+                // Refresh email status
+                if (date) {
+                  const statusRes = await getDailyEmailStatus(date);
+                  setEmailStatus(statusRes.data?.sent ? statusRes.data : null);
+                }
+              } catch (err) {
+                toast.error(err.response?.data?.message || 'Failed to send emails');
+              } finally {
+                setSendingEmails(false);
               }
-            } catch (err) {
-              toast.error(err.response?.data?.message || 'Failed to send emails');
-            } finally {
-              setSendingEmails(false);
-            }
-          }}
-          disabled={sendingEmails}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
-        >
-          <Mail size={16} />
-          {sendingEmails ? 'Sending…' : 'Send Daily Summary Emails'}
-        </button>
-      </div>
-
-      {/* Daily email status indicator */}
-      {emailStatus?.sent && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 w-fit">
-          <CheckCircle2 size={16} className="flex-shrink-0" />
-          <span>
-            Daily summary emails sent ✓
-            {emailStatus.timestamp && (
-              <span className="ml-2 text-green-500 text-xs">
-                {new Date(emailStatus.timestamp).toLocaleString()}
-              </span>
-            )}
-          </span>
+            }}
+            disabled={sendingEmails}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 disabled:opacity-60 transition-colors"
+          >
+            <Mail size={18} />
+            {sendingEmails ? 'Sending…' : 'Send Summary Emails'}
+          </button>
         </div>
-      )}
+        
+        <div className="flex items-center gap-4">
+          {/* Daily email status indicator */}
+          {emailStatus?.sent && (
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-bold text-emerald-700">
+              <CheckCircle2 size={16} />
+              Emails sent ✓
+            </div>
+          )}
+          
+          <Link
+            to="/take-attendance"
+            className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
+          >
+            Take New Attendance
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

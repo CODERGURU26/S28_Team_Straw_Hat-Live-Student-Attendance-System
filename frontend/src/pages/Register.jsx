@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, XCircle, X } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
+import { CheckCircle2, XCircle, X, Camera, ArrowLeft, UploadCloud } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { registerStudent, validateStudentPhoto } from '../api'
 
@@ -89,73 +89,101 @@ export default function Register() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-3xl space-y-4">
-      <h1 className="text-2xl font-bold">Register Student</h1>
-      <p className="text-amber-600 text-sm">Add photos from different angles for better accuracy.</p>
-
-      <input className="w-full p-3 rounded-lg border" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
-      <input type="email" className="w-full p-3 rounded-lg border" placeholder="Email (@slrtce.in)" value={email} onChange={(e) => setEmail(e.target.value)} required pattern=".*@slrtce\.in$" title="Please use your @slrtce.in email address" />
-      <input className="w-full p-3 rounded-lg border" placeholder="Roll Number" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} required />
-
-      <div>
-        <input
-          type="email"
-          className="w-full p-3 rounded-lg border"
-          placeholder="Parent / Guardian Email (optional)"
-          value={parentEmail}
-          onChange={(e) => setParentEmail(e.target.value)}
-        />
-        <p className="text-xs text-slate-400 mt-1">
-          If provided, the parent will be CC'd on daily and weekly attendance emails.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {slots.map((slot, index) => (
-          <div key={index} className="relative bg-white border rounded-lg p-2 h-40 flex items-center justify-center">
-            {!slot.file ? (
-              <label className="cursor-pointer text-center text-sm text-slate-500">
-                <span className="block">Upload</span>
-                <span className="block">slot {index + 1}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => assignPhotoToSlot(index, e.target.files?.[0])}
-                />
-              </label>
-            ) : (
-              <>
-                <img src={slot.preview} alt={`slot-${index + 1}`} className="h-full w-full object-cover rounded" />
-                <button
-                  type="button"
-                  onClick={() => removeSlotPhoto(index)}
-                  className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1"
-                >
-                  <X size={14} />
-                </button>
-                <div className="absolute bottom-1 left-1 right-1 bg-white/90 rounded px-1 py-0.5 text-[10px]">
-                  {slot.status === 'validating' && 'Validating...'}
-                  {slot.status === 'valid' && <span className="text-green-700 flex items-center gap-1"><CheckCircle2 size={12} /> Valid</span>}
-                  {slot.status === 'invalid' && <span className="text-red-700 flex items-center gap-1"><XCircle size={12} /> Invalid</span>}
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <p className="text-sm text-slate-500">{selectedCount} / {MAX_PHOTOS} photos selected (minimum 1, maximum 5)</p>
-
-      {loading && (
-        <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-          <div className="bg-green-500 h-2 transition-all" style={{ width: `${progress}%` }} />
+    <div className="max-w-4xl mx-auto py-8">
+      <Link to="/" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors mb-8">
+        <ArrowLeft size={16} className="mr-1" /> Back to home
+      </Link>
+      
+      <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
+        <div className="bg-slate-900 px-8 py-10 relative overflow-hidden text-center sm:text-left">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -translate-y-1/2 translate-x-1/3"></div>
+          <h1 className="text-3xl font-extrabold text-white mb-2 relative z-10">Student Registration</h1>
+          <p className="text-blue-200 text-sm relative z-10">Create your account to access the attendance portal.</p>
         </div>
-      )}
 
-      <button disabled={loading} className="px-4 py-2 bg-green-500 text-white rounded-lg disabled:opacity-60">
-        {loading ? 'Registering...' : 'Register Student'}
-      </button>
-    </form>
+        <form onSubmit={onSubmit} className="p-8 sm:p-10 space-y-8">
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Full Name</label>
+              <input className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">College Email</label>
+              <input type="email" className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" placeholder="student@slrtce.in" value={email} onChange={(e) => setEmail(e.target.value)} required pattern=".*@slrtce\.in$" title="Please use your @slrtce.in email address" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Roll Number</label>
+              <input className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" placeholder="e.g. 21IT101" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} required />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Parent Email <span className="text-slate-400 font-normal">(Optional)</span></label>
+              <input type="email" className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" placeholder="parent@example.com" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-8">
+            <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+              <Camera className="text-blue-500" size={20} />
+              Face Registration Data
+            </h3>
+            <p className="text-slate-500 text-sm mb-6">Upload clear photos of your face from different angles for the AI recognition system.</p>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {slots.map((slot, index) => (
+                <div key={index} className="relative group bg-slate-50 border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl h-40 flex items-center justify-center transition-colors overflow-hidden">
+                  {!slot.file ? (
+                    <label className="cursor-pointer text-center text-sm text-slate-500 w-full h-full flex flex-col items-center justify-center p-4">
+                      <UploadCloud size={24} className="text-slate-400 mb-2 group-hover:text-blue-500 transition-colors" />
+                      <span className="font-medium">Slot {index + 1}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => assignPhotoToSlot(index, e.target.files?.[0])}
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <img src={slot.preview} alt={`slot-${index + 1}`} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeSlotPhoto(index)}
+                        className="absolute top-2 right-2 bg-slate-900/60 hover:bg-rose-500 text-white rounded-full p-1.5 backdrop-blur-sm transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                      <div className="absolute bottom-2 left-2 right-2 flex justify-center">
+                        <div className="bg-white/95 backdrop-blur shadow-sm rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center">
+                          {slot.status === 'validating' && <span className="text-slate-600 animate-pulse">Validating</span>}
+                          {slot.status === 'valid' && <span className="text-emerald-600 flex items-center gap-1"><CheckCircle2 size={12} /> Valid</span>}
+                          {slot.status === 'invalid' && <span className="text-rose-600 flex items-center gap-1"><XCircle size={12} /> Invalid</span>}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-sm font-medium text-slate-500 mt-4 text-center">{selectedCount} / {MAX_PHOTOS} photos selected</p>
+          </div>
+
+          {loading && (
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div className="bg-blue-500 h-full transition-all duration-300" style={{ width: `${progress}%` }} />
+            </div>
+          )}
+
+          <div className="pt-4 flex flex-col sm:flex-row gap-4 items-center justify-between border-t border-slate-100">
+            <p className="text-sm text-slate-500">
+              Already have an account? <Link to="/student-login" className="text-blue-600 font-bold hover:underline">Log in</Link>
+            </p>
+            <button disabled={loading} className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 text-white font-bold rounded-xl disabled:opacity-60 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20 active:scale-[0.98]">
+              {loading ? 'Processing...' : 'Complete Registration'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }

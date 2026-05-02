@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { ChevronDown, ChevronLeft, ChevronRight, Download } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { getMonthlyAnalytics } from '../api'
 
 const getCurrentMonth = () => new Date().toISOString().slice(0, 7)
@@ -140,35 +140,124 @@ export default function MonthlyAnalytics() {
     }))
   }
 
+  const applyStylesAndWidths = (worksheet, data, highlightCondition = null) => {
+    // 1. Calculate max width for each column
+    const colWidths = [];
+    
+    if (data.length > 0) {
+      Object.keys(data[0]).forEach((key, colIndex) => {
+        colWidths[colIndex] = { wch: key.toString().length + 5 }; 
+      });
+    }
+
+    data.forEach((row) => {
+      Object.values(row).forEach((val, colIndex) => {
+        const valStr = val !== null && val !== undefined ? val.toString() : '';
+        if (valStr.length + 5 > (colWidths[colIndex]?.wch || 0)) {
+          colWidths[colIndex] = { wch: valStr.length + 5 };
+        }
+      });
+    });
+
+    worksheet['!cols'] = colWidths;
+
+    // 2. Apply styles to all cells
+    if (!worksheet['!ref']) return;
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_address = { c: C, r: R };
+        const cell_ref = XLSX.utils.encode_cell(cell_address);
+        if (!worksheet[cell_ref]) continue;
+
+        worksheet[cell_ref].s = {
+          alignment: {
+            horizontal: 'center',
+            vertical: 'center'
+          }
+        };
+        
+        if (R === 0) {
+          worksheet[cell_ref].s.font = { bold: true };
+        } else if (highlightCondition && highlightCondition(data[R - 1])) {
+          worksheet[cell_ref].s.fill = {
+            fgColor: { rgb: "FFFFCDD2" } // Light red background
+          };
+          worksheet[cell_ref].s.font = {
+            color: { rgb: "FFB71C1C" }, // Dark red text
+            bold: true
+          };
+        }
+      }
+    }
+  };
+
   const exportToExcel = () => {
     if (!analytics) return
 
-    const summarySheet = XLSX.utils.json_to_sheet([
+    const summaryData = [
       { Metric: 'Month', Value: formatMonthLabel(month) },
       { Metric: 'Total Sessions Scheduled', Value: analytics.total_scheduled_sessions },
       { Metric: 'Attendance Taken', Value: analytics.sessions_with_attendance },
       { Metric: 'Sessions Missed', Value: analytics.sessions_missed },
       { Metric: 'Avg Attendance Rate', Value: `${avgAttendanceRate}%` },
-    ])
+    ];
+    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+    applyStylesAndWidths(summarySheet, summaryData);
 
-    const subjectSheet = XLSX.utils.json_to_sheet(sortedSubjects.map((row) => ({
+    const subjectData = sortedSubjects.map((row) => ({
       Subject: row.subject,
       Type: row.type,
       Scheduled: row.scheduled_count,
       Attended: row.attended_count,
       Rate: `${row.attendance_rate}%`,
-    })))
+    }));
+    const subjectSheet = XLSX.utils.json_to_sheet(subjectData);
+    applyStylesAndWidths(subjectSheet, subjectData);
 
-    const studentSheet = XLSX.utils.json_to_sheet(sortedStudents.map((row) => ({
+    const studentData = sortedStudents.map((row) => ({
       Student: row.name,
       'Roll No': row.roll_number,
       Present: row.total_present,
       Absent: row.total_absent,
       Rate: `${row.overall_rate}%`,
-    })))
+    }));
+    const studentSheet = XLSX.utils.json_to_sheet(studentData);
+    applyStylesAndWidths(studentSheet, studentData, (row) => parseFloat(row.Rate) < 75);
+
+    const matrixSheetData = sortedStudents.map((student) => {
+      const row = { Student: student.name };
+      let totalRateSum = 0;
+      let subjectCount = 0;
+
+      sortedSubjects.forEach((subj) => {
+        const studentSubj = subj.per_student.find(s => s.roll_number === student.roll_number);
+        const colNameClasses = `${subj.subject} (${subj.scheduled_count})`;
+        const colNamePercent = `${subj.subject} %`;
+        
+        if (studentSubj) {
+          row[colNameClasses] = studentSubj.present_count;
+          row[colNamePercent] = `${studentSubj.rate}%`;
+          if (subj.scheduled_count > 0) {
+            totalRateSum += studentSubj.rate;
+            subjectCount++;
+          }
+        } else {
+          row[colNameClasses] = 0;
+          row[colNamePercent] = "0%";
+        }
+      });
+
+      row["Total Average"] = subjectCount > 0 ? `${(totalRateSum / subjectCount).toFixed(1)}%` : "0%";
+      return row;
+    });
+
+    const matrixSheet = XLSX.utils.json_to_sheet(matrixSheetData);
+    applyStylesAndWidths(matrixSheet, matrixSheetData, (row) => parseFloat(row["Total Average"]) < 75);
 
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary')
+    XLSX.utils.book_append_sheet(workbook, matrixSheet, 'Comprehensive Matrix')
     XLSX.utils.book_append_sheet(workbook, subjectSheet, 'By Subject')
     XLSX.utils.book_append_sheet(workbook, studentSheet, 'By Student')
     XLSX.writeFile(workbook, `attendance_${month}.xlsx`)

@@ -23,7 +23,7 @@ export default function App() {
   const isStudentFullscreen = ['/student-login', '/student-dashboard'].includes(location.pathname)
 
   return (
-    <div className={`min-h-screen ${isStudentFullscreen ? '' : 'bg-slate-100'} ${!hideNavbar ? 'md:flex' : ''}`}>
+    <div className={`min-h-screen ${isStudentFullscreen ? '' : 'bg-slate-50'} ${!hideNavbar ? 'md:flex' : ''}`}>
       {!hideNavbar && <Navbar />}
       {isStudentFullscreen ? (
         <Routes>

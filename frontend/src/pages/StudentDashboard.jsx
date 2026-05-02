@@ -30,6 +30,7 @@ import {
   getSessionsWeek,
   getLeaderboard,
   getStudentGamification,
+  getMonthlyLeaderboard,
 } from "../api";
 
 import TeacherSchedule from "./TeacherSchedule";
@@ -44,6 +45,7 @@ export default function StudentDashboard() {
   const [schedules, setSchedules] = useState({});
   const [gamification, setGamification] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [monthlyLeaderboard, setMonthlyLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -64,17 +66,19 @@ export default function StudentDashboard() {
 
     const loadData = async () => {
       try {
-        const [attRes, schedRes, gamificationRes, leaderboardRes] =
+        const [attRes, schedRes, gamificationRes, leaderboardRes, monthlyRes] =
           await Promise.all([
             getStudentAttendance(parsed.id),
             getSessionsWeek(TODAY_ISO),
             getStudentGamification(parsed.id),
             getLeaderboard(),
+            getMonthlyLeaderboard(),
           ]);
         setAttendance(attRes.data);
         setSchedules(schedRes.data);
         setGamification(gamificationRes.data);
         setLeaderboard(leaderboardRes.data);
+        setMonthlyLeaderboard(monthlyRes.data);
       } catch (err) {
         console.error(err);
         toast.error("Failed to load dashboard data");
@@ -124,7 +128,7 @@ export default function StudentDashboard() {
     } catch (err) {
       toast.error(
         err.response?.data?.message ||
-          "Failed to upload photo. Please ensure face is clear.",
+        "Failed to upload photo. Please ensure face is clear.",
       );
     } finally {
       setUploading(false);
@@ -141,15 +145,8 @@ export default function StudentDashboard() {
     };
   }, [attendance]);
 
-  const streakInfo = useMemo(() => {
-    if (!attendance?.records?.length) return { current: 0 };
-    let current = 0;
-    for (const r of attendance.records) {
-      if (r.status === "present") current++;
-      else break;
-    }
-    return { current };
-  }, [attendance]);
+  // streakInfo is derived from gamification.streak (server-computed, most accurate)
+  // No need to re-compute locally.
 
   const scheduledCount = useMemo(
     () =>
@@ -180,704 +177,772 @@ export default function StudentDashboard() {
     : null;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* ─── Top Navigation Bar ─── */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ScanFace size={24} className="text-indigo-600" />
-            <span className="font-bold text-xl text-slate-800">
-              Face Attendance
-            </span>
-          </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans relative overflow-hidden">
+      {/* Background Ornaments */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-5%] left-[-5%] w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30"></div>
+        <div className="absolute top-[20%] right-[-5%] w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30"></div>
+      </div>
 
-          <div className="flex items-center gap-4">
-            <span className="hidden sm:inline text-sm font-medium text-slate-500">
-              Student Portal
-            </span>
-            <button
-              onClick={logout}
-              className="p-2 ml-4 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
-            >
-              <LogOut size={18} />
-              <span className="hidden sm:inline font-medium">Logout</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <div className="relative z-10">
+        {/* ─── Top Navigation Bar ─── */}
+        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ScanFace size={24} className="text-indigo-600" />
+              <span className="font-bold text-xl text-slate-800">
+                Face Attendance
+              </span>
+            </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* ─── Notification Banner ─── */}
-        {scheduledCount > 0 && (
-          <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex items-start sm:items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="flex items-center gap-3">
-              <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg">
-                <CalendarCheck size={20} />
+            <div className="flex items-center gap-4">
+              <span className="hidden sm:inline text-sm font-medium text-slate-500">
+                Student Portal
+              </span>
+              <button
+                onClick={logout}
+                className="p-2 ml-4 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2"
+              >
+                <LogOut size={18} />
+                <span className="hidden sm:inline font-medium">Logout</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* ─── Notification Banner ─── */}
+          {scheduledCount > 0 && (
+            <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex items-start sm:items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg">
+                  <CalendarCheck size={20} />
+                </div>
+                <div>
+                  <p className="font-semibold text-indigo-900">
+                    Upcoming Schedule
+                  </p>
+                  <p className="text-sm text-indigo-700">
+                    You have {scheduledCount} session{scheduledCount !== 1 && "s"}{" "}
+                    scheduled for this week.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab("schedule")}
+                className="hidden sm:inline-block px-4 py-1.5 bg-white text-indigo-600 font-medium text-sm rounded-lg shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors"
+              >
+                View Schedule
+              </button>
+            </div>
+          )}
+
+          {/* ─── Critical Absence Warning ─── */}
+          {gamification?.absence_streak > 3 && (
+            <div className="mb-6 bg-rose-50 border-2 border-rose-200 rounded-xl p-5 flex items-start gap-4 shadow-md animate-bounce-subtle">
+              <div className="bg-rose-100 text-rose-600 p-3 rounded-full flex-shrink-0">
+                <AlertOctagon size={28} />
               </div>
               <div>
-                <p className="font-semibold text-indigo-900">
-                  Upcoming Schedule
+                <h3 className="text-lg font-bold text-rose-900 mb-1">
+                  Critical Absence Warning
+                </h3>
+                <p className="text-rose-700 font-medium leading-relaxed">
+                  You have been absent for{" "}
+                  <span className="font-extrabold">
+                    {gamification.absence_streak} consecutive sessions
+                  </span>
+                  . A notification has been sent to the faculty, and your teacher
+                  is required to contact your parents/guardians immediately.
                 </p>
-                <p className="text-sm text-indigo-700">
-                  You have {scheduledCount} session{scheduledCount !== 1 && "s"}{" "}
-                  scheduled for this week.
+                <p className="text-rose-600 text-sm mt-2 flex items-center gap-1 font-semibold uppercase tracking-wider">
+                  <Info size={14} /> Please contact your course coordinator as
+                  soon as possible.
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setActiveTab("schedule")}
-              className="hidden sm:inline-block px-4 py-1.5 bg-white text-indigo-600 font-medium text-sm rounded-lg shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors"
-            >
-              View Schedule
-            </button>
-          </div>
-        )}
+          )}
 
-        {/* ─── Critical Absence Warning ─── */}
-        {gamification?.absence_streak > 3 && (
-          <div className="mb-6 bg-rose-50 border-2 border-rose-200 rounded-xl p-5 flex items-start gap-4 shadow-md animate-bounce-subtle">
-            <div className="bg-rose-100 text-rose-600 p-3 rounded-full flex-shrink-0">
-              <AlertOctagon size={28} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-rose-900 mb-1">
-                Critical Absence Warning
-              </h3>
-              <p className="text-rose-700 font-medium leading-relaxed">
-                You have been absent for{" "}
-                <span className="font-extrabold">
-                  {gamification.absence_streak} consecutive sessions
-                </span>
-                . A notification has been sent to the faculty, and your teacher
-                is required to contact your parents/guardians immediately.
-              </p>
-              <p className="text-rose-600 text-sm mt-2 flex items-center gap-1 font-semibold uppercase tracking-wider">
-                <Info size={14} /> Please contact your course coordinator as
-                soon as possible.
-              </p>
+          {/* ─── Profile Header ─── */}
+          <div className="relative bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-10 mb-8 overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full filter blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3"></div>
+            <div className="relative z-10 flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-center">
+              <div className="flex-shrink-0">
+                {photoUrl ? (
+                  <img
+                    src={photoUrl}
+                    alt={student.name}
+                    className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] object-cover shadow-lg shadow-indigo-100 border border-slate-100"
+                  />
+                ) : (
+                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] bg-indigo-50 flex items-center justify-center shadow-lg shadow-indigo-100 border border-slate-100">
+                    <User size={40} className="text-indigo-300" />
+                  </div>
+                )}
+              </div>
+
+              <div className="text-center md:text-left flex-1">
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight">
+                  {student.name}
+                </h1>
+                <div className="flex flex-col md:flex-row gap-3 md:gap-6 text-slate-600 text-sm items-center md:items-start">
+                  <span className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg font-medium border border-slate-100">
+                    <span className="text-slate-400">Roll No:</span>
+                    <span className="text-slate-900">{student.roll_number}</span>
+                  </span>
+                  <span className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg font-medium border border-slate-100">
+                    <span className="text-slate-400">Email:</span>
+                    <span className="text-slate-900">{student.email}</span>
+                  </span>
+                  {gamification?.badge !== "None" && (
+                    <span
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-bold border shadow-sm ${gamification.badge === "Gold"
+                          ? "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border-amber-200 shadow-amber-100/50"
+                          : gamification.badge === "Silver"
+                            ? "bg-gradient-to-r from-slate-100 to-slate-50 text-slate-700 border-slate-200 shadow-slate-200/50"
+                            : "bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 border-orange-200 shadow-orange-100/50"
+                        }`}
+                    >
+                      <Trophy size={16} /> {gamification.badge} Badge
+                    </span>
+                  )}
+                  {gamification?.streak > 0 && (
+                    <span className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-bold bg-gradient-to-r from-rose-100 to-rose-50 text-rose-700 border border-rose-200 shadow-sm shadow-rose-100/50">
+                      <TrendingUp size={16} /> {gamification.streak} Class Streak
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* ─── Profile Header ─── */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8 mb-6 flex flex-col md:flex-row gap-6 items-center md:items-start">
-          <div className="flex-shrink-0">
-            {photoUrl ? (
-              <img
-                src={photoUrl}
-                alt={student.name}
-                className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-slate-50"
-              />
-            ) : (
-              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-slate-100 flex items-center justify-center border-4 border-slate-50">
-                <User size={40} className="text-slate-400" />
+          {/* ─── Metric Dashboard ─── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatCard
+              icon={CheckCircle2}
+              label="Present Days"
+              value={stats?.present ?? 0}
+              color="emerald"
+            />
+            <StatCard
+              icon={CalendarX}
+              label="Absent Days"
+              value={stats?.absent ?? 0}
+              color="rose"
+            />
+            <StatCard
+              icon={CalendarCheck}
+              label="Total Sessions"
+              value={stats?.total ?? 0}
+              color="indigo"
+            />
+            <StatCard
+              icon={Clock}
+              label="Current Streak"
+              value={`${gamification?.streak ?? 0} sessions`}
+              color="cyan"
+            />
+          </div>
+
+          {/* ─── Tabs ─── */}
+          <div className="flex gap-2 mb-6 border-b border-slate-200 overflow-x-auto">
+            {[
+              { id: "overview", label: "Overview" },
+              { id: "schedule", label: "Schedule" },
+              { id: "history", label: "History" },
+              { id: "profile", label: "Settings & Photos" },
+            ].map((tab) => {
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-5 py-3 text-sm font-medium border-b-2 transition-all ${active
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ─── Tab Content ─── */}
+          <div className="min-h-[400px]">
+            {activeTab === "schedule" && (
+              <div className="-mx-4 sm:mx-0">
+                <TeacherSchedule roleOverride="student" />
+              </div>
+            )}
+
+            {activeTab === "overview" && (
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 space-y-6">
+                  {/* Circular Progress */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col items-center justify-center">
+                    <h3 className="text-slate-600 font-semibold mb-6 self-start w-full">
+                      Attendance Rate
+                    </h3>
+
+                    <div className="relative w-48 h-48 flex items-center justify-center">
+                      <svg
+                        className="w-full h-full -rotate-90"
+                        viewBox="0 0 160 160"
+                      >
+                        <circle
+                          cx="80"
+                          cy="80"
+                          r="70"
+                          fill="none"
+                          strokeWidth="12"
+                          className="stroke-slate-100"
+                        />
+                        <circle
+                          cx="80"
+                          cy="80"
+                          r="70"
+                          fill="none"
+                          strokeWidth="12"
+                          strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 70}`}
+                          strokeDashoffset={`${2 * Math.PI * 70 * (1 - (stats?.percentage ?? 0) / 100)}`}
+                          className={`${(stats?.percentage ?? 0) >= 75 ? "stroke-emerald-500" : (stats?.percentage ?? 0) >= 50 ? "stroke-amber-400" : "stroke-rose-500"} transition-all duration-1000 origin-center`}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-4xl font-bold text-slate-800">
+                          {stats?.percentage ?? 0}
+                          <span className="text-xl ml-1 text-slate-500">%</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gamification Panel */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    <h3 className="text-slate-600 font-semibold mb-4 flex items-center gap-2">
+                      <Award className="text-indigo-600" size={18} /> Achievement
+                      Progress
+                    </h3>
+
+                    <div className="space-y-4">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-slate-500 font-medium">
+                          To{" "}
+                          {gamification?.badge === "Gold"
+                            ? "Perfect Score"
+                            : gamification?.badge === "Silver"
+                              ? "Gold Badge"
+                              : gamification?.badge === "Bronze"
+                                ? "Silver Badge"
+                                : "Bronze Badge"}
+                        </span>
+                        <span className="text-indigo-600 font-bold">
+                          {stats?.percentage ?? 0}% /{" "}
+                          {gamification?.next_threshold ?? 50}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                        <div
+                          className="bg-indigo-600 h-full transition-all duration-1000"
+                          style={(() => {
+                            const pct = stats?.percentage ?? 0;
+                            const next = gamification?.next_threshold || 50;
+                            const prevMap = { 50: 0, 75: 50, 90: 75, 100: 90 };
+                            const prev = prevMap[next] ?? 0;
+                            const progress = next > prev
+                              ? Math.min(100, Math.max(0, ((pct - prev) / (next - prev)) * 100))
+                              : 100;
+                            return { width: `${progress}%` };
+                          })()}
+                        ></div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-2">
+                        <div
+                          className={`flex flex-col items-center p-2 rounded-lg border ${(stats?.percentage ?? 0) >= 50 ? "bg-orange-50 border-orange-200" : "bg-slate-50 border-slate-100 grayscale"}`}
+                        >
+                          <Medal
+                            size={20}
+                            className={
+                              (stats?.percentage ?? 0) >= 50
+                                ? "text-orange-600"
+                                : "text-slate-400"
+                            }
+                          />
+                          <span className="text-[10px] font-bold mt-1">
+                            BRONZE
+                          </span>
+                        </div>
+                        <div
+                          className={`flex flex-col items-center p-2 rounded-lg border ${(stats?.percentage ?? 0) >= 75 ? "bg-slate-100 border-slate-300" : "bg-slate-50 border-slate-100 grayscale"}`}
+                        >
+                          <Medal
+                            size={20}
+                            className={
+                              (stats?.percentage ?? 0) >= 75
+                                ? "text-slate-600"
+                                : "text-slate-400"
+                            }
+                          />
+                          <span className="text-[10px] font-bold mt-1">
+                            SILVER
+                          </span>
+                        </div>
+                        <div
+                          className={`flex flex-col items-center p-2 rounded-lg border ${(stats?.percentage ?? 0) >= 90 ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-100 grayscale"}`}
+                        >
+                          <Trophy
+                            size={20}
+                            className={
+                              (stats?.percentage ?? 0) >= 90
+                                ? "text-amber-600"
+                                : "text-slate-400"
+                            }
+                          />
+                          <span className="text-[10px] font-bold mt-1">GOLD</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Weekly Leaderboard */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    <h3 className="text-slate-600 font-semibold mb-4 flex items-center gap-2">
+                      <Star className="text-amber-500" size={18} /> Weekly Top
+                      Performers
+                    </h3>
+                    <div className="space-y-3">
+                      {leaderboard.length === 0 ? (
+                        <p className="text-slate-400 text-xs text-center py-4 italic">
+                          No rankings available yet this week.
+                        </p>
+                      ) : (
+                        leaderboard.map((entry, idx) => (
+                          <div
+                            key={idx}
+                            className={`flex items-center justify-between p-2 rounded-lg transition-colors ${entry.name === student.name ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50"}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${idx === 0
+                                    ? "bg-amber-100 text-amber-700"
+                                    : idx === 1
+                                      ? "bg-slate-200 text-slate-700"
+                                      : idx === 2
+                                        ? "bg-orange-100 text-orange-700"
+                                        : "bg-slate-100 text-slate-500"
+                                  }`}
+                              >
+                                {idx + 1}
+                              </span>
+                              <span
+                                className={`text-sm font-medium ${entry.name === student.name ? "text-indigo-900" : "text-slate-700"}`}
+                              >
+                                {entry.name}{" "}
+                                {entry.name === student.name && "(You)"}
+                              </span>
+                            </div>
+                            <span className="text-xs font-bold text-slate-600">
+                              {entry.percentage}%
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Monthly Leaderboard */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    <h3 className="text-slate-600 font-semibold mb-4 flex items-center gap-2">
+                      <Award className="text-indigo-500" size={18} /> Monthly Top
+                      Performers
+                    </h3>
+                    <div className="space-y-3">
+                      {monthlyLeaderboard.length === 0 ? (
+                        <p className="text-slate-400 text-xs text-center py-4 italic">
+                          No rankings available yet this month.
+                        </p>
+                      ) : (
+                        monthlyLeaderboard.map((entry, idx) => (
+                          <div
+                            key={idx}
+                            className={`flex items-center justify-between p-2 rounded-lg transition-colors ${entry.name === student.name ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50"}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${idx === 0
+                                    ? "bg-indigo-100 text-indigo-700"
+                                    : idx === 1
+                                      ? "bg-indigo-50 text-indigo-600"
+                                      : idx === 2
+                                        ? "bg-slate-100 text-slate-600"
+                                        : "bg-slate-50 text-slate-400"
+                                  }`}
+                              >
+                                {idx + 1}
+                              </span>
+                              <span
+                                className={`text-sm font-medium ${entry.name === student.name ? "text-indigo-900" : "text-slate-700"}`}
+                              >
+                                {entry.name}{" "}
+                                {entry.name === student.name && "(You)"}
+                              </span>
+                            </div>
+                            <span className="text-xs font-bold text-slate-600">
+                              {entry.percentage}%
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Activity */}
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Heatmap */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm overflow-hidden">
+                    <h3 className="text-slate-600 font-semibold mb-6">
+                      Attendance Density
+                    </h3>
+                    <AttendanceHeatmap records={attendance?.records || []} />
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-slate-600 font-semibold">
+                        Recent Activity
+                      </h3>
+                      <button
+                        onClick={() => setActiveTab("history")}
+                        className="text-indigo-600 text-sm font-medium hover:text-indigo-800 transition-colors flex items-center gap-1"
+                      >
+                        View all <ChevronRight size={16} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {!attendance?.records?.length ? (
+                        <div className="text-center py-8">
+                          <p className="text-slate-500 text-sm">
+                            No recent attendance records.
+                          </p>
+                        </div>
+                      ) : (
+                        attendance.records.slice(0, 4).map((record, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div
+                                className={`p-2 rounded-full ${record.status === "present" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
+                              >
+                                {record.status === "present" ? (
+                                  <CheckCircle2 size={20} />
+                                ) : (
+                                  <XCircle size={20} />
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-slate-900 font-medium">
+                                  {new Date(record.timestamp).toLocaleDateString(
+                                    "en-US",
+                                    {
+                                      day: "numeric",
+                                      month: "long",
+                                      year: "numeric",
+                                    },
+                                  )}
+                                </p>
+                                <p className="text-slate-500 text-sm">
+                                  {new Date(record.timestamp).toLocaleTimeString(
+                                    "en-US",
+                                    { hour: "2-digit", minute: "2-digit" },
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${record.status === "present"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-rose-100 text-rose-700"
+                                }`}
+                            >
+                              {record.status}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "history" && (
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                {!attendance?.records?.length ? (
+                  <div className="text-center py-16">
+                    <Clock size={48} className="text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500">
+                      No attendance history available.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4">Date</th>
+                          <th className="px-6 py-4 hidden sm:table-cell">Subject</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 hidden md:table-cell">
+                            Total Present
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {attendance.records.map((record, idx) => (
+                          <React.Fragment key={idx}>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-6 py-4 text-slate-800">
+                                {record.session_date
+                                  ? new Date(record.session_date + "T00:00:00").toLocaleDateString("en-IN", {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
+                                  })
+                                  : new Date(record.timestamp).toLocaleString("en-US", {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                              </td>
+                              <td className="px-6 py-4 text-slate-600 hidden sm:table-cell">
+                                {record.subject
+                                  ? <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-medium">{record.subject}</span>
+                                  : <span className="text-slate-400 text-xs">—</span>}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium text-xs ${record.status === "present"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-rose-50 text-rose-700"
+                                    }`}
+                                >
+                                  {record.status === "present"
+                                    ? "Present"
+                                    : "Absent"}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-slate-500 hidden md:table-cell">
+                                {record.total_present} Students
+                              </td>
+                            </tr>
+                            {record.notes && (
+                              <tr className="bg-slate-50/30 border-b border-slate-100">
+                                <td colSpan={4} className="px-6 pb-4 pt-1 text-sm text-slate-600">
+                                  <span className="font-semibold text-slate-700">Teacher Note:</span> {record.notes}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "profile" && (
+              <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                {/* Account info — email read-only, parent email NOT shown to students */}
+                <div className="mb-6 pb-6 border-b border-slate-100">
+                  <h3 className="text-lg font-bold text-slate-800 mb-3">
+                    Account Information
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <div className="bg-indigo-100 text-indigo-600 p-2 rounded-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Email Address</p>
+                        <p className="text-sm font-medium text-slate-800 truncate">{student.email}</p>
+                      </div>
+                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Read only</span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Your email was set when you registered. To change it, contact your administrator.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold text-slate-800 mb-1">
+                    Face Database
+                  </h3>
+                  <p className="text-slate-500 text-sm">
+                    Upload clear photos of yourself to improve facial recognition
+                    accuracy. ({photoCount}/5 utilized)
+                  </p>
+                </div>
+
+                <div className="grid lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2">
+                    {student.registration_photos?.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-8">
+                        {student.registration_photos.map((p, i) => (
+                          <div
+                            key={i}
+                            className="aspect-square relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm"
+                          >
+                            <img
+                              src={p.startsWith("http") ? p : `${API_BASE}/static/${p}`}
+                              alt={`Face ${i}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-white text-xs font-medium">
+                                #{i + 1}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {/* Empty placeholders */}
+                        {Array.from({ length: 5 - photoCount }).map((_, i) => (
+                          <div
+                            key={`empty-${i}`}
+                            className="border-2 border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center bg-slate-50 text-slate-400"
+                          >
+                            <ScanFace size={24} className="opacity-50" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Upload Form */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
+                      <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <Upload size={18} className="text-indigo-600" />
+                        Upload Additional Photo
+                      </h4>
+
+                      {canUploadMore ? (
+                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                          <div className="flex-1 w-full relative">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              ref={fileInputRef}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                              onChange={handlePhotoSelect}
+                              title=""
+                            />
+                            {!photoPreview ? (
+                              <div className="w-full py-6 border-2 border-dashed border-slate-300 bg-white rounded-lg text-center transition-colors hover:border-indigo-400 hover:bg-slate-50">
+                                <Camera
+                                  size={24}
+                                  className="mx-auto mb-2 text-slate-400"
+                                />
+                                <span className="text-sm font-medium text-slate-600">
+                                  Click to browse or drag image here
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="relative aspect-video sm:w-64 border border-slate-200 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center pointer-events-none">
+                                <img
+                                  src={photoPreview}
+                                  alt="Preview"
+                                  className="h-full object-contain"
+                                />
+                              </div>
+                            )}
+                            {photoPreview && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPhotoPreview(null);
+                                  setSelectedPhoto(null);
+                                  if (fileInputRef.current)
+                                    fileInputRef.current.value = "";
+                                }}
+                                className="absolute top-2 right-2 bg-white/90 shadow-sm p-1.5 rounded-md hover:bg-red-50 text-slate-600 hover:text-red-600 transition-colors z-20"
+                              >
+                                <XCircle size={18} />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="w-full sm:w-auto mt-4 sm:mt-0">
+                            <button
+                              disabled={!selectedPhoto || uploading}
+                              onClick={handleUploadPhoto}
+                              className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 rounded-lg text-white font-medium disabled:opacity-50 disabled:bg-slate-400 hover:bg-indigo-700 transition-colors flex justify-center items-center gap-2"
+                            >
+                              {uploading ? "Processing..." : "Upload Photo"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 font-medium text-sm gap-2">
+                          <CheckCircle2 size={18} /> You have reached the maximum
+                          limit of 5 photos.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-1">
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-5">
+                      <h4 className="flex items-center gap-2 font-semibold text-indigo-900 mb-3">
+                        <Info size={18} /> Model Accuracy
+                      </h4>
+                      <p className="text-sm text-indigo-800 mb-4 leading-relaxed">
+                        Providing multiple photos from different angles or in
+                        different lighting significantly improves the system's
+                        ability to recognize you during attendance.
+                      </p>
+                      <ul className="text-sm text-indigo-700 space-y-2 list-disc list-inside">
+                        <li>Ensure your face is clearly visible.</li>
+                        <li>Avoid wearing sunglasses or hats.</li>
+                        <li>Look directly at the camera.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-
-          <div className="text-center md:text-left flex-1">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
-              {student.name}
-            </h1>
-            <div className="flex flex-col md:flex-row gap-2 md:gap-6 text-slate-500 text-sm items-center md:items-start">
-              <span className="flex items-center gap-1">
-                <span className="font-semibold text-slate-700">Roll No:</span>{" "}
-                {student.roll_number}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="font-semibold text-slate-700">Email:</span>{" "}
-                {student.email}
-              </span>
-              {gamification?.badge !== "None" && (
-                <span
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${
-                    gamification.badge === "Gold"
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : gamification.badge === "Silver"
-                        ? "bg-slate-50 text-slate-700 border-slate-200"
-                        : "bg-orange-50 text-orange-700 border-orange-200"
-                  }`}
-                >
-                  <Trophy size={12} /> {gamification.badge} Badge
-                </span>
-              )}
-              {gamification?.streak > 0 && (
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-600 border border-rose-100">
-                  <TrendingUp size={12} /> {gamification.streak} Day Streak
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ─── Metric Dashboard ─── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard
-            icon={CheckCircle2}
-            label="Present Days"
-            value={stats?.present ?? 0}
-            color="emerald"
-          />
-          <StatCard
-            icon={CalendarX}
-            label="Absent Days"
-            value={stats?.absent ?? 0}
-            color="rose"
-          />
-          <StatCard
-            icon={CalendarCheck}
-            label="Total Sessions"
-            value={stats?.total ?? 0}
-            color="indigo"
-          />
-          <StatCard
-            icon={Clock}
-            label="Current Streak"
-            value={`${streakInfo.current} days`}
-            color="cyan"
-          />
-        </div>
-
-        {/* ─── Tabs ─── */}
-        <div className="flex gap-2 mb-6 border-b border-slate-200 overflow-x-auto">
-          {[
-            { id: "overview", label: "Overview" },
-            { id: "schedule", label: "Schedule" },
-            { id: "history", label: "History" },
-            { id: "profile", label: "Settings & Photos" },
-          ].map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition-all ${
-                  active
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ─── Tab Content ─── */}
-        <div className="min-h-[400px]">
-          {activeTab === "schedule" && (
-            <div className="-mx-4 sm:mx-0">
-               <TeacherSchedule roleOverride="student" />
-            </div>
-          )}
-
-          {activeTab === "overview" && (
-            <div className="grid lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 space-y-6">
-                {/* Circular Progress */}
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col items-center justify-center">
-                  <h3 className="text-slate-600 font-semibold mb-6 self-start w-full">
-                    Attendance Rate
-                  </h3>
-
-                  <div className="relative w-48 h-48 flex items-center justify-center">
-                    <svg
-                      className="w-full h-full -rotate-90"
-                      viewBox="0 0 160 160"
-                    >
-                      <circle
-                        cx="80"
-                        cy="80"
-                        r="70"
-                        fill="none"
-                        strokeWidth="12"
-                        className="stroke-slate-100"
-                      />
-                      <circle
-                        cx="80"
-                        cy="80"
-                        r="70"
-                        fill="none"
-                        strokeWidth="12"
-                        strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 70}`}
-                        strokeDashoffset={`${2 * Math.PI * 70 * (1 - (stats?.percentage ?? 0) / 100)}`}
-                        className={`${(stats?.percentage ?? 0) >= 75 ? "stroke-emerald-500" : (stats?.percentage ?? 0) >= 50 ? "stroke-amber-400" : "stroke-rose-500"} transition-all duration-1000 origin-center`}
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-4xl font-bold text-slate-800">
-                        {stats?.percentage ?? 0}
-                        <span className="text-xl ml-1 text-slate-500">%</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Gamification Panel */}
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                  <h3 className="text-slate-600 font-semibold mb-4 flex items-center gap-2">
-                    <Award className="text-indigo-600" size={18} /> Achievement
-                    Progress
-                  </h3>
-
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-500 font-medium">
-                        To{" "}
-                        {gamification?.badge === "Gold"
-                          ? "Perfect Score"
-                          : gamification?.badge === "Silver"
-                            ? "Gold Badge"
-                            : gamification?.badge === "Bronze"
-                              ? "Silver Badge"
-                              : "Bronze Badge"}
-                      </span>
-                      <span className="text-indigo-600 font-bold">
-                        {stats?.percentage ?? 0}% /{" "}
-                        {gamification?.next_threshold ?? 50}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
-                      <div
-                        className="bg-indigo-600 h-full transition-all duration-1000"
-                        style={{
-                          width: `${Math.min(100, ((stats?.percentage ?? 0) / (gamification?.next_threshold || 50)) * 100)}%`,
-                        }}
-                      ></div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 pt-2">
-                      <div
-                        className={`flex flex-col items-center p-2 rounded-lg border ${(stats?.percentage ?? 0) >= 50 ? "bg-orange-50 border-orange-200" : "bg-slate-50 border-slate-100 grayscale"}`}
-                      >
-                        <Medal
-                          size={20}
-                          className={
-                            (stats?.percentage ?? 0) >= 50
-                              ? "text-orange-600"
-                              : "text-slate-400"
-                          }
-                        />
-                        <span className="text-[10px] font-bold mt-1">
-                          BRONZE
-                        </span>
-                      </div>
-                      <div
-                        className={`flex flex-col items-center p-2 rounded-lg border ${(stats?.percentage ?? 0) >= 75 ? "bg-slate-100 border-slate-300" : "bg-slate-50 border-slate-100 grayscale"}`}
-                      >
-                        <Medal
-                          size={20}
-                          className={
-                            (stats?.percentage ?? 0) >= 75
-                              ? "text-slate-600"
-                              : "text-slate-400"
-                          }
-                        />
-                        <span className="text-[10px] font-bold mt-1">
-                          SILVER
-                        </span>
-                      </div>
-                      <div
-                        className={`flex flex-col items-center p-2 rounded-lg border ${(stats?.percentage ?? 0) >= 90 ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-100 grayscale"}`}
-                      >
-                        <Trophy
-                          size={20}
-                          className={
-                            (stats?.percentage ?? 0) >= 90
-                              ? "text-amber-600"
-                              : "text-slate-400"
-                          }
-                        />
-                        <span className="text-[10px] font-bold mt-1">GOLD</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Weekly Leaderboard */}
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                  <h3 className="text-slate-600 font-semibold mb-4 flex items-center gap-2">
-                    <Star className="text-amber-500" size={18} /> Weekly Top
-                    Performers
-                  </h3>
-                  <div className="space-y-3">
-                    {leaderboard.length === 0 ? (
-                      <p className="text-slate-400 text-xs text-center py-4 italic">
-                        No rankings available yet this week.
-                      </p>
-                    ) : (
-                      leaderboard.map((entry, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex items-center justify-between p-2 rounded-lg transition-colors ${entry.name === student.name ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50"}`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
-                                idx === 0
-                                  ? "bg-amber-100 text-amber-700"
-                                  : idx === 1
-                                    ? "bg-slate-200 text-slate-700"
-                                    : idx === 2
-                                      ? "bg-orange-100 text-orange-700"
-                                      : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {idx + 1}
-                            </span>
-                            <span
-                              className={`text-sm font-medium ${entry.name === student.name ? "text-indigo-900" : "text-slate-700"}`}
-                            >
-                              {entry.name}{" "}
-                              {entry.name === student.name && "(You)"}
-                            </span>
-                          </div>
-                          <span className="text-xs font-bold text-slate-600">
-                            {entry.percentage}%
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Heatmap */}
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm overflow-hidden">
-                  <h3 className="text-slate-600 font-semibold mb-6">
-                    Attendance Density
-                  </h3>
-                  <AttendanceHeatmap records={attendance?.records || []} />
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-slate-600 font-semibold">
-                      Recent Activity
-                    </h3>
-                    <button
-                      onClick={() => setActiveTab("history")}
-                      className="text-indigo-600 text-sm font-medium hover:text-indigo-800 transition-colors flex items-center gap-1"
-                    >
-                      View all <ChevronRight size={16} />
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {!attendance?.records?.length ? (
-                      <div className="text-center py-8">
-                        <p className="text-slate-500 text-sm">
-                          No recent attendance records.
-                        </p>
-                      </div>
-                    ) : (
-                      attendance.records.slice(0, 4).map((record, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div
-                              className={`p-2 rounded-full ${record.status === "present" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
-                            >
-                              {record.status === "present" ? (
-                                <CheckCircle2 size={20} />
-                              ) : (
-                                <XCircle size={20} />
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-slate-900 font-medium">
-                                {new Date(record.timestamp).toLocaleDateString(
-                                  "en-US",
-                                  {
-                                    day: "numeric",
-                                    month: "long",
-                                    year: "numeric",
-                                  },
-                                )}
-                              </p>
-                              <p className="text-slate-500 text-sm">
-                                {new Date(record.timestamp).toLocaleTimeString(
-                                  "en-US",
-                                  { hour: "2-digit", minute: "2-digit" },
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${
-                              record.status === "present"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-rose-100 text-rose-700"
-                            }`}
-                          >
-                            {record.status}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "history" && (
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              {!attendance?.records?.length ? (
-                <div className="text-center py-16">
-                  <Clock size={48} className="text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-500">
-                    No attendance history available.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
-                      <tr>
-                        <th className="px-6 py-4">Date</th>
-                        <th className="px-6 py-4">Status</th>
-                        <th className="px-6 py-4 hidden sm:table-cell">
-                          Total Present
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {attendance.records.map((record, idx) => (
-                        <React.Fragment key={idx}>
-                          <tr className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 text-slate-800">
-                              {new Date(record.timestamp).toLocaleString(
-                                "en-US",
-                                {
-                                  weekday: "short",
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium text-xs ${
-                                  record.status === "present"
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : "bg-rose-50 text-rose-700"
-                                }`}
-                              >
-                                {record.status === "present"
-                                  ? "Present"
-                                  : "Absent"}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-slate-500 hidden sm:table-cell">
-                              {record.total_present} Students
-                            </td>
-                          </tr>
-                          {record.notes && (
-                            <tr className="bg-slate-50/30 border-b border-slate-100">
-                              <td colSpan={3} className="px-6 pb-4 pt-1 text-sm text-slate-600">
-                                <span className="font-semibold text-slate-700">Teacher Note:</span> {record.notes}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "profile" && (
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-              {/* Account info — email read-only, parent email NOT shown to students */}
-              <div className="mb-6 pb-6 border-b border-slate-100">
-                <h3 className="text-lg font-bold text-slate-800 mb-3">
-                  Account Information
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <div className="bg-indigo-100 text-indigo-600 p-2 rounded-md">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Email Address</p>
-                      <p className="text-sm font-medium text-slate-800 truncate">{student.email}</p>
-                    </div>
-                    <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Read only</span>
-                  </div>
-                  <p className="text-xs text-slate-400">
-                    Your email was set when you registered. To change it, contact your administrator.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-1">
-                  Face Database
-                </h3>
-                <p className="text-slate-500 text-sm">
-                  Upload clear photos of yourself to improve facial recognition
-                  accuracy. ({photoCount}/5 utilized)
-                </p>
-              </div>
-
-              <div className="grid lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
-                  {student.registration_photos?.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-8">
-                      {student.registration_photos.map((p, i) => (
-                        <div
-                          key={i}
-                          className="aspect-square relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm"
-                        >
-                          <img
-                            src={`${API_BASE}/static/${p}`}
-                            alt={`Face ${i}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <span className="text-white text-xs font-medium">
-                              #{i + 1}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {/* Empty placeholders */}
-                      {Array.from({ length: 5 - photoCount }).map((_, i) => (
-                        <div
-                          key={`empty-${i}`}
-                          className="border-2 border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center bg-slate-50 text-slate-400"
-                        >
-                          <ScanFace size={24} className="opacity-50" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Upload Form */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
-                    <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                      <Upload size={18} className="text-indigo-600" />
-                      Upload Additional Photo
-                    </h4>
-
-                    {canUploadMore ? (
-                      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                        <div className="flex-1 w-full relative">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            ref={fileInputRef}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                            onChange={handlePhotoSelect}
-                            title=""
-                          />
-                          {!photoPreview ? (
-                            <div className="w-full py-6 border-2 border-dashed border-slate-300 bg-white rounded-lg text-center transition-colors hover:border-indigo-400 hover:bg-slate-50">
-                              <Camera
-                                size={24}
-                                className="mx-auto mb-2 text-slate-400"
-                              />
-                              <span className="text-sm font-medium text-slate-600">
-                                Click to browse or drag image here
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="relative aspect-video sm:w-64 border border-slate-200 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center pointer-events-none">
-                              <img
-                                src={photoPreview}
-                                alt="Preview"
-                                className="h-full object-contain"
-                              />
-                            </div>
-                          )}
-                          {photoPreview && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPhotoPreview(null);
-                                setSelectedPhoto(null);
-                                if (fileInputRef.current)
-                                  fileInputRef.current.value = "";
-                              }}
-                              className="absolute top-2 right-2 bg-white/90 shadow-sm p-1.5 rounded-md hover:bg-red-50 text-slate-600 hover:text-red-600 transition-colors z-20"
-                            >
-                              <XCircle size={18} />
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="w-full sm:w-auto mt-4 sm:mt-0">
-                          <button
-                            disabled={!selectedPhoto || uploading}
-                            onClick={handleUploadPhoto}
-                            className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 rounded-lg text-white font-medium disabled:opacity-50 disabled:bg-slate-400 hover:bg-indigo-700 transition-colors flex justify-center items-center gap-2"
-                          >
-                            {uploading ? "Processing..." : "Upload Photo"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 font-medium text-sm gap-2">
-                        <CheckCircle2 size={18} /> You have reached the maximum
-                        limit of 5 photos.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="lg:col-span-1">
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-5">
-                    <h4 className="flex items-center gap-2 font-semibold text-indigo-900 mb-3">
-                      <Info size={18} /> Model Accuracy
-                    </h4>
-                    <p className="text-sm text-indigo-800 mb-4 leading-relaxed">
-                      Providing multiple photos from different angles or in
-                      different lighting significantly improves the system's
-                      ability to recognize you during attendance.
-                    </p>
-                    <ul className="text-sm text-indigo-700 space-y-2 list-disc list-inside">
-                      <li>Ensure your face is clearly visible.</li>
-                      <li>Avoid wearing sunglasses or hats.</li>
-                      <li>Look directly at the camera.</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
 
 function StatCard({ icon: Icon, label, value, color }) {
   const colorMap = {
-    cyan: "text-cyan-600 bg-cyan-100",
-    emerald: "text-emerald-600 bg-emerald-100",
-    rose: "text-rose-600 bg-rose-100",
-    indigo: "text-indigo-600 bg-indigo-100",
+    cyan: "text-cyan-600 bg-cyan-50",
+    emerald: "text-emerald-600 bg-emerald-50",
+    rose: "text-rose-600 bg-rose-50",
+    indigo: "text-indigo-600 bg-indigo-50",
   };
   const bg = colorMap[color];
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className={`p-3 rounded-xl ${bg}`}>
+    <div className="bg-white/50 border border-slate-100 rounded-[1.5rem] p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+      <div className={`p-4 rounded-2xl ${bg}`}>
         <Icon size={24} />
       </div>
       <div>
-        <p className="text-slate-500 text-sm font-medium mb-1">{label}</p>
-        <p className="text-slate-900 text-2xl font-bold">{value}</p>
+        <p className="text-slate-500 text-sm font-semibold mb-0.5">{label}</p>
+        <p className="text-slate-900 text-2xl font-extrabold tracking-tight">{value}</p>
       </div>
     </div>
   );

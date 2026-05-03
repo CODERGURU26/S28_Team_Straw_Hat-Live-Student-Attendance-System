@@ -75,6 +75,13 @@ CORS(app,
      methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
      supports_credentials=True)
 
+# ── Telegram Webhook Setup ─────────────────────────────────────
+try:
+    import telegram_service
+    threading.Thread(target=telegram_service.setup_webhook, daemon=True).start()
+except Exception as e:
+    logger.error("Error starting Telegram webhook thread: %s", e)
+
 # ── APScheduler: weekly email job ──────────────────────────────
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -555,6 +562,7 @@ def take_attendance():
 
     schedule_id = request.form.get("session_id") or request.form.get("schedule_id")
     session_date = request.form.get("session_date")
+    notes = request.form.get("notes", "").strip()
     if session_date:
         try:
             session_date = _validate_iso_date(session_date, "session_date").isoformat()
@@ -574,6 +582,7 @@ def take_attendance():
         "annotated_image_path": annotated_paths[0] if annotated_paths else "",
         "results": final_recognition_results,
         "absent_students": absent_students,
+        "notes": notes,
     }
     if schedule_id:
         record["schedule_id"] = schedule_id
@@ -586,6 +595,13 @@ def take_attendance():
         record["time"] = session_definition.get("time")
         
     create_attendance_record(record)
+
+    # ── Auto-trigger: send instant Telegram notifications ──
+    try:
+        import telegram_service
+        threading.Thread(target=telegram_service.send_session_attendance, args=(record,), daemon=True).start()
+    except Exception as telegram_exc:
+        logger.error("Failed to start Telegram notification thread: %s", telegram_exc)
 
     # ── Auto-trigger: send daily emails when all sessions are done ──
     def _maybe_trigger_daily_email(local_date_str: str):
@@ -795,6 +811,7 @@ def student_login():
             ],
             "photo_count": int(student.get("photo_count", 1)),
             "registered_at": student.get("registered_at"),
+            "telegram_chat_id": student.get("telegram_chat_id"),
         }
     })
 
@@ -966,36 +983,6 @@ def list_sessions_for_month():
     try:
         _validate_month_value(month_value)
         sessions_in_month = get_session_month(month_value)
-        
-        attendance_records = [
-            record for record in get_sessions()
-            if str(record.get("session_date") or record.get("date", "")).startswith(month_value)
-        ]
-
-        for occurrence in sessions_in_month:
-            occurrence_date = occurrence.get("date")
-            occurrence_subject = occurrence.get("subject")
-            occurrence_session_id = str(occurrence.get("session_id", ""))
-
-            matching_record = next(
-                (
-                    record for record in attendance_records
-                    if (record.get("session_date") or record.get("date")) == occurrence_date
-                    and (
-                        str(record.get("schedule_id", "")) == occurrence_session_id
-                        or record.get("subject") == occurrence_subject
-                    )
-                ),
-                None,
-            )
-
-            if matching_record:
-                occurrence["attendance_taken"] = True
-                occurrence["attendance_session_id"] = str(matching_record.get("session_id"))
-            else:
-                occurrence["attendance_taken"] = False
-                occurrence["attendance_session_id"] = None
-
         return jsonify(sessions_in_month), 200
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
@@ -1019,43 +1006,35 @@ def student_month_attendance(student_id):
 
         results = []
         for occurrence in scheduled_sessions:
-            occurrence_date = occurrence.get("date")
-            occurrence_subject = occurrence.get("subject")
-            occurrence_session_id = str(occurrence.get("session_id", ""))
-
-            matching_record = next(
-                (
-                    record for record in attendance_records
-                    if (record.get("session_date") or record.get("date")) == occurrence_date
-                    and (
-                        str(record.get("schedule_id", "")) == occurrence_session_id
-                        or record.get("subject") == occurrence_subject
-                    )
-                ),
-                None,
-            )
-
             status = "not_marked"
-            if matching_record:
-                present_ids = {
-                    str(result.get("student_id", ""))
-                    for result in matching_record.get("results", [])
-                    if result.get("status") == "present"
-                }
-                absent_ids = {
-                    str(student.get("student_id", ""))
-                    for student in matching_record.get("absent_students", [])
-                }
+            
+            if occurrence.get("attendance_taken"):
+                attendance_id = occurrence.get("attendance_session_id")
+                matching_record = next(
+                    (r for r in attendance_records if str(r.get("session_id", r.get("_id"))) == attendance_id), 
+                    None
+                )
+                
+                if matching_record:
+                    present_ids = {
+                        str(result.get("student_id", ""))
+                        for result in matching_record.get("results", [])
+                        if result.get("status") == "present"
+                    }
+                    absent_ids = {
+                        str(student.get("student_id", ""))
+                        for student in matching_record.get("absent_students", [])
+                    }
 
-                if student_id in present_ids:
-                    status = "present"
-                elif student_id in absent_ids:
-                    status = "absent"
+                    if student_id in present_ids:
+                        status = "present"
+                    elif student_id in absent_ids:
+                        status = "absent"
 
             results.append({
-                "session_id": occurrence_session_id,
-                "subject": occurrence_subject,
-                "date": occurrence_date,
+                "session_id": occurrence.get("session_id", ""),
+                "subject": occurrence.get("subject"),
+                "date": occurrence.get("date"),
                 "status": status,
             })
 
@@ -1329,6 +1308,41 @@ def daily_email_status_route():
         if status:
             return jsonify(status), 200
         return jsonify({"sent": False}), 200
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+# ── Telegram API routes ────────────────────────────────────────────────────────
+
+@app.route("/api/telegram/webhook", methods=["POST"])
+def telegram_webhook():
+    """Receives all updates sent to the bot by Telegram."""
+    try:
+        import telegram_service
+        data = request.get_json(force=True, silent=True) or {}
+        telegram_service.handle_webhook(data)
+    except Exception as exc:
+        logger.error("Telegram webhook handler error: %s", exc)
+    # Always return 200 so Telegram does not retry the update
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/api/telegram/status", methods=["GET"])
+def telegram_status_route():
+    """Returns whether the bot token is configured and how many students are linked."""
+    try:
+        import telegram_service
+        bot_active = telegram_service.is_telegram_configured()
+        bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "")
+        students = get_students(include_encodings=False)
+        total = len(students)
+        linked = sum(1 for s in students if s.get("telegram_chat_id"))
+        return jsonify({
+            "bot_active": bot_active,
+            "bot_username": bot_username,
+            "linked_count": linked,
+            "total_students": total,
+        }), 200
     except Exception as exc:
         return jsonify({"success": False, "message": str(exc)}), 500
 

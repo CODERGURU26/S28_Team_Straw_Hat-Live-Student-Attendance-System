@@ -22,6 +22,7 @@ import {
   Star,
   AlertOctagon,
   Bell,
+  MessageCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -31,11 +32,13 @@ import {
   getLeaderboard,
   getStudentGamification,
   getMonthlyLeaderboard,
+  studentLogin,
 } from "../api";
 
 import TeacherSchedule from "./TeacherSchedule";
 
 const API_BASE = import.meta.env.VITE_API_URL;
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || '';
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
 
 export default function StudentDashboard() {
@@ -66,19 +69,25 @@ export default function StudentDashboard() {
 
     const loadData = async () => {
       try {
-        const [attRes, schedRes, gamificationRes, leaderboardRes, monthlyRes] =
+        const [attRes, schedRes, gamificationRes, leaderboardRes, monthlyRes, loginRes] =
           await Promise.all([
             getStudentAttendance(parsed.id),
             getSessionsWeek(TODAY_ISO),
             getStudentGamification(parsed.id),
             getLeaderboard(),
             getMonthlyLeaderboard(),
+            studentLogin(parsed.email).catch(() => null),
           ]);
         setAttendance(attRes.data);
         setSchedules(schedRes.data);
         setGamification(gamificationRes.data);
         setLeaderboard(leaderboardRes.data);
         setMonthlyLeaderboard(monthlyRes.data);
+        
+        if (loginRes && loginRes.data?.success) {
+          setStudent(loginRes.data.student);
+          localStorage.setItem("student", JSON.stringify(loginRes.data.student));
+        }
       } catch (err) {
         console.error(err);
         toast.error("Failed to load dashboard data");
@@ -781,6 +790,54 @@ export default function StudentDashboard() {
                     <p className="text-xs text-slate-400">
                       Your email was set when you registered. To change it, contact your administrator.
                     </p>
+                  </div>
+                </div>
+
+                {/* Telegram Link Status */}
+                <div className="mb-6 pb-6 border-b border-slate-100">
+                  <h3 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+                    <MessageCircle size={20} className="text-sky-500" />
+                    Telegram Notifications
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <div className={`p-2 rounded-md ${student.telegram_chat_id ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                        <MessageCircle size={16} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Telegram Status</p>
+                        {student.telegram_chat_id ? (
+                          <p className="text-sm font-semibold text-emerald-600">Linked ✓</p>
+                        ) : (
+                          <p className="text-sm font-medium text-slate-500">Not linked</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {!student.telegram_chat_id && (
+                      <div className="bg-sky-50 border border-sky-100 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-sky-900 mb-2">
+                          To receive instant attendance notifications on Telegram:
+                        </p>
+                        <ol className="text-sm text-sky-800 space-y-1 list-decimal list-inside leading-relaxed">
+                          <li>
+                            Search for{' '}
+                            {BOT_USERNAME
+                              ? <span className="font-bold">@{BOT_USERNAME}</span>
+                              : 'the attendance bot'}{' '}
+                            on Telegram
+                          </li>
+                          <li>Send <span className="font-mono font-bold">/start</span> to the bot</li>
+                          <li>Follow the instructions and send your Roll Number to link your account</li>
+                        </ol>
+                      </div>
+                    )}
+
+                    {student.telegram_chat_id && (
+                      <p className="text-xs text-slate-400">
+                        You will receive an instant Telegram message each time attendance is marked for a session.
+                      </p>
+                    )}
                   </div>
                 </div>
 

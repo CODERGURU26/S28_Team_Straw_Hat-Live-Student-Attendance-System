@@ -39,6 +39,7 @@ def _serialize_student(student: dict) -> dict:
         "photo_count": int(student.get("photo_count", 1)),
         "registered_at": student.get("registered_at"),
         "parent_email": student.get("parent_email", ""),
+        "telegram_chat_id": student.get("telegram_chat_id", None),
     }
 
 
@@ -52,6 +53,7 @@ def create_student(
     photo_count: int,
     student_id: ObjectId | None = None,
     parent_email: str = "",
+    telegram_chat_id: str | None = None,
 ) -> str:
     existing = students_col.find_one({"roll_number": roll_number})
     if existing:
@@ -67,6 +69,7 @@ def create_student(
         "photo_count": photo_count,
         "registered_at": datetime.now(timezone.utc),
         "parent_email": parent_email or "",
+        "telegram_chat_id": telegram_chat_id,
     }
 
     if student_id is not None:
@@ -168,6 +171,7 @@ def get_email_settings() -> dict:
         return {
             "daily_enabled": True,
             "weekly_enabled": True,
+            "telegram_enabled": True,
             "weekly_send_day": 6,   # Sunday
             "weekly_send_hour": 20,
             "weekly_send_minute": 0,
@@ -182,6 +186,7 @@ def save_email_settings(data: dict) -> None:
     payload = {
         "daily_enabled": bool(data.get("daily_enabled", True)),
         "weekly_enabled": bool(data.get("weekly_enabled", True)),
+        "telegram_enabled": bool(data.get("telegram_enabled", True)),
         "weekly_send_day": int(data.get("weekly_send_day", 6)),
         "weekly_send_hour": int(data.get("weekly_send_hour", 20)),
         "weekly_send_minute": int(data.get("weekly_send_minute", 0)),
@@ -637,13 +642,16 @@ def get_session_month(month_value: str) -> list[dict]:
         }
     }))
 
+    claimed_record_ids = set()
+
     for occ in occurrences:
         occurrence_date = occ["date"]
         # Match by schedule ID
         match = next(
             (
                 record for record in attendance_records
-                if (record.get("session_date") or record.get("date")) == occurrence_date
+                if str(record.get("_id")) not in claimed_record_ids
+                and (record.get("session_date") or record.get("date")) == occurrence_date
                 and str(record.get("schedule_id", "")) == occ["session_id"]
             ),
             None,
@@ -653,13 +661,16 @@ def get_session_month(month_value: str) -> list[dict]:
             match = next(
                 (
                     record for record in attendance_records
-                    if (record.get("session_date") or record.get("date")) == occurrence_date
+                    if str(record.get("_id")) not in claimed_record_ids
+                    and (record.get("session_date") or record.get("date")) == occurrence_date
                     and record.get("subject") == occ["subject"]
+                    and not record.get("schedule_id")
                 ),
                 None,
             )
 
         if match:
+            claimed_record_ids.add(str(match.get("_id")))
             occ["attendance_taken"] = True
             occ["attendance_session_id"] = str(match.get("session_id", match.get("_id")))
             occ["notes"] = match.get("notes", "")

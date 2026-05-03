@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { Plus, Trash2, Mail, Users, Pencil, Check, X } from 'lucide-react'
+import { Plus, Trash2, Mail, Users, Pencil, Check, X, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { updateStudentPartial } from '../api'
+
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || ''
 
 const API_BASE = import.meta.env.VITE_API_URL
 
@@ -111,6 +113,21 @@ export default function StudentCard({ student, onDelete, onAddPhotos, onParentEm
             </div>
           )}
         </div>
+
+        {/* Telegram status */}
+        <div className="flex items-start gap-2 text-sm mt-1">
+          <MessageCircle size={14} className="text-slate-400 flex-shrink-0 mt-0.5" />
+          {student.telegram_chat_id ? (
+            <span className="text-emerald-600 font-medium text-xs">Linked ✓</span>
+          ) : (
+            <span className="text-slate-400 italic text-xs">Not linked</span>
+          )}
+        </div>
+        {!student.telegram_chat_id && BOT_USERNAME && (
+          <p className="text-[11px] text-slate-400 mt-1 pl-5 leading-tight">
+            Student must message <span className="font-semibold">@{BOT_USERNAME}</span> on Telegram to link
+          </p>
+        )}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 mt-auto">

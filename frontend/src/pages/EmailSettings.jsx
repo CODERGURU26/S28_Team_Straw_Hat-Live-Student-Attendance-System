@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Mail, ToggleLeft, ToggleRight, Send, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Mail, ToggleLeft, ToggleRight, Send, Clock, CheckCircle2, AlertCircle, MessageCircle, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { getEmailSettings, saveEmailSettings, sendTestEmail } from '../api'
+import { getEmailSettings, saveEmailSettings, sendTestEmail, getTelegramStatus } from '../api'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
@@ -9,6 +9,7 @@ export default function EmailSettings() {
   const [settings, setSettings] = useState({
     daily_enabled: true,
     weekly_enabled: true,
+    telegram_enabled: true,
     weekly_send_day: 6,
     weekly_send_hour: 20,
     weekly_send_minute: 0,
@@ -16,6 +17,7 @@ export default function EmailSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [sendingTest, setSendingTest] = useState(false)
+  const [telegramStatus, setTelegramStatus] = useState(null)
 
   // Read teacher info from localStorage
   const teacher = (() => {
@@ -23,9 +25,13 @@ export default function EmailSettings() {
   })()
 
   useEffect(() => {
-    getEmailSettings()
-      .then((res) => setSettings(res.data))
-      .catch(() => toast.error('Failed to load email settings'))
+    Promise.all([
+      getEmailSettings(),
+      getTelegramStatus().catch(() => null),
+    ]).then(([settingsRes, telegramRes]) => {
+      setSettings(settingsRes.data)
+      if (telegramRes) setTelegramStatus(telegramRes.data)
+    }).catch(() => toast.error('Failed to load settings'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -191,6 +197,68 @@ export default function EmailSettings() {
             Note: Changes to the send time take effect on the next app restart.
           </p>
         </div>
+      </div>
+
+      {/* Telegram Notifications card */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+              <MessageCircle size={18} className="text-sky-500" />
+              Telegram Notifications
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Sends an instant message to each student on Telegram immediately after attendance is taken.
+            </p>
+          </div>
+          <button
+            onClick={() => toggleSetting('telegram_enabled')}
+            className="flex-shrink-0 ml-4"
+            title={settings.telegram_enabled ? 'Disable Telegram messages' : 'Enable Telegram messages'}
+          >
+            {settings.telegram_enabled
+              ? <ToggleRight size={40} className="text-sky-500" />
+              : <ToggleLeft size={40} className="text-slate-400" />}
+          </button>
+        </div>
+
+        <div className={`mt-3 flex items-center gap-2 text-sm font-medium ${settings.telegram_enabled ? 'text-green-600' : 'text-slate-400'}`}>
+          {settings.telegram_enabled
+            ? <><CheckCircle2 size={14} /> Enabled</>
+            : <><AlertCircle size={14} /> Disabled</>}
+        </div>
+
+        {/* Bot status + linked count */}
+        <div className="mt-4 border-t border-slate-100 pt-4 space-y-2">
+          <div className="flex items-center gap-2 text-sm">
+            {telegramStatus?.bot_active
+              ? <span className="flex items-center gap-1.5 text-emerald-600 font-medium"><CheckCircle2 size={14} /> Bot Active ✓</span>
+              : <span className="flex items-center gap-1.5 text-amber-600 font-medium"><AlertCircle size={14} /> Bot token not configured</span>}
+          </div>
+          {telegramStatus && (
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Users size={14} className="text-slate-400" />
+              {telegramStatus.linked_count} of {telegramStatus.total_students} students have linked Telegram
+            </div>
+          )}
+          {telegramStatus?.bot_username && (
+            <p className="text-xs text-slate-400">
+              Bot: <span className="font-semibold text-slate-600">@{telegramStatus.bot_username}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Setup instructions */}
+        {!telegramStatus?.bot_active && (
+          <div className="mt-4 bg-sky-50 border border-sky-100 rounded-lg p-3">
+            <p className="text-xs text-sky-800 font-semibold mb-1">Setup Required</p>
+            <p className="text-xs text-sky-700 leading-relaxed">
+              Set <code className="bg-sky-100 px-1 rounded">TELEGRAM_BOT_TOKEN</code> and{' '}
+              <code className="bg-sky-100 px-1 rounded">TELEGRAM_BOT_USERNAME</code> in your backend{' '}
+              <code className="bg-sky-100 px-1 rounded">.env</code> file, then restart the server.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Test email */}

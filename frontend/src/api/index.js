@@ -71,4 +71,7 @@ export const getEmailLogs = () => api.get("/api/email/logs");
 export const getDailyEmailStatus = (date) =>
   api.get("/api/email/daily-status", { params: date ? { date } : {} });
 
+// Telegram APIs
+export const getTelegramStatus = () => api.get("/api/telegram/status");
+
 export default api;

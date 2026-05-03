@@ -19,6 +19,7 @@ export default function TakeAttendance() {
   const [todaySessions, setTodaySessions] = useState([])
   const [allTodaySessions, setAllTodaySessions] = useState([])
   const [scheduleId, setScheduleId] = useState('')
+  const [notes, setNotes] = useState('')
   const today = formatLocalDate(new Date())
   const currentMonth = today.slice(0, 7)
 
@@ -45,6 +46,9 @@ export default function TakeAttendance() {
     formData.append('session_date', today)
     if (scheduleId) {
       formData.append('session_id', scheduleId)
+    }
+    if (notes) {
+      formData.append('notes', notes)
     }
 
     try {
@@ -154,6 +158,20 @@ export default function TakeAttendance() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Session Notes Area */}
+          <div>
+            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg> Session Notes (Optional)
+            </h3>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full border-2 border-slate-200 rounded-2xl p-4 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-700 placeholder:text-slate-400"
+              placeholder="E.g., Covered Chapter 5, many students arrived late due to rain..."
+              rows="3"
+            />
           </div>
 
         </div>
